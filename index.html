@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Photo Booth">
+<meta name="theme-color" content="#faf6ef">
+<title>Photo Booth</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<style>
+  @font-face{font-family:Inter;font-weight:400;font-style:normal;font-display:block;src:url(fonts/Inter-Regular.woff) format('woff')}
+  @font-face{font-family:Inter;font-weight:500;font-style:normal;font-display:block;src:url(fonts/Inter-Medium.woff) format('woff')}
+  @font-face{font-family:Inter;font-weight:600;font-style:normal;font-display:block;src:url(fonts/Inter-SemiBold.woff) format('woff')}
+  :root{
+    --cream:#faf6ef; --ink:#2b2420; --accent:#b4553e; --muted:#8a7d72; --card:#fffdf8; --line:#e6ddd0;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--cream);color:var(--ink);
+    font-family:Inter, -apple-system, system-ui, sans-serif;overflow:hidden;touch-action:manipulation;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  input,select,textarea{-webkit-user-select:text;user-select:text}
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    padding:calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px);text-align:center}
+  .screen.active{display:flex}
+  h1{font-weight:600;font-size:clamp(44px,8vw,92px);margin:0 0 10px;letter-spacing:-0.045em;line-height:1}
+  .homeLogo{height:clamp(52px,8vw,88px);width:auto;max-width:70vw;margin-bottom:30px;display:block}
+  .sub{color:var(--muted);font-size:clamp(17px,2.3vw,24px);margin:0 0 44px;font-weight:400;letter-spacing:-0.01em}
+  .btn{font-family:inherit;font-weight:500;letter-spacing:-0.01em;font-size:clamp(19px,2.6vw,26px);padding:20px 46px;border-radius:999px;
+    border:2px solid var(--ink);background:var(--ink);color:var(--cream);cursor:pointer;min-width:200px}
+  .btn.ghost{background:transparent;color:var(--ink)}
+  .btn:active{transform:scale(.97)}
+  .row{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+
+  /* attract */
+  .looks{display:flex;gap:22px;flex-wrap:wrap;justify-content:center}
+  .look{width:clamp(150px,20vw,210px);background:var(--card);border:2px solid var(--ink);border-radius:18px;
+    padding:14px 14px 18px;cursor:pointer;transition:transform .15s}
+  .look:active{transform:scale(.96)}
+  .look .sw{height:clamp(110px,15vw,150px);border-radius:10px;margin-bottom:12px}
+  .look span{font-size:clamp(17px,2.2vw,21px);font-weight:500;letter-spacing:-0.01em}
+  .sw.color{background:linear-gradient(135deg,#f3b8a5,#f6d58e 50%,#9cc9c0)}
+  .sw.bw{background:linear-gradient(135deg,#1d1d1d,#9a9a9a 55%,#eaeaea)}
+  .sw.sepia{background:linear-gradient(135deg,#4a3420,#a8825a 55%,#efdcbc)}
+  .hint{margin-top:38px;color:var(--muted);font-size:18px}
+
+  /* capture */
+  #capture{background:#000;padding:0}
+  #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #video.mirror{transform:scaleX(-1)}
+  #frameGuide{position:absolute;border:3px solid rgba(255,255,255,.75);border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.35);pointer-events:none}
+  #count{position:absolute;font-size:min(40vw,320px);color:#fff;font-weight:600;letter-spacing:-0.04em;text-shadow:0 6px 30px rgba(0,0,0,.5);pointer-events:none}
+  #shotLabel{position:absolute;top:calc(env(safe-area-inset-top) + 22px);left:0;right:0;color:#fff;font-size:24px;font-weight:500;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+  #thumbs{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 18px);left:0;right:0;display:flex;gap:10px;justify-content:center}
+  #thumbs div{width:96px;height:72px;border:3px solid #fff;border-radius:6px;background:rgba(255,255,255,.15);background-size:cover;background-position:center}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  #flash.go{animation:flash .45s ease-out}
+  @keyframes flash{0%{opacity:1}100%{opacity:0}}
+
+  /* review */
+  #review{flex-direction:row;gap:5vw}
+  .stripWrap{height:min(88vh,1200px);aspect-ratio:1/3;box-shadow:0 18px 50px rgba(43,36,32,.25);border-radius:4px;overflow:hidden;background:#fff}
+  .stripWrap img{width:100%;height:100%;display:block}
+  .reviewSide{display:flex;flex-direction:column;align-items:center;gap:18px;max-width:420px}
+  .reviewSide h2{font-weight:600;letter-spacing:-0.035em;font-size:clamp(32px,4.6vw,52px);margin:0 0 10px}
+  #autoNote{color:var(--muted);font-size:18px;min-height:26px;max-width:340px}
+  @media (orientation:portrait){ #review{flex-direction:column;gap:24px} .stripWrap{height:min(72vh,1200px)} }
+
+  /* printing */
+  .chute{width:min(70vw,600px);height:22px;background:var(--ink);border-radius:12px;position:relative;z-index:2}
+  .chuteWin{height:min(64vh,800px);aspect-ratio:1/3;overflow:hidden;margin-top:-11px;position:relative}
+  .chuteWin img{width:100%;display:block;transform:translateY(-102%);box-shadow:0 10px 30px rgba(0,0,0,.2)}
+  .chuteWin img.drop{animation:drop 3.2s cubic-bezier(.3,.7,.2,1) forwards}
+  @keyframes drop{to{transform:translateY(0)}}
+  #printMsg{font-size:clamp(24px,3.2vw,34px);font-weight:600;letter-spacing:-0.03em;margin:26px 0 8px}
+  #printSub{color:var(--muted);font-size:18px;margin-bottom:22px}
+
+  /* settings */
+  #settings{position:fixed;inset:0;background:rgba(43,36,32,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  #settings.open{display:flex}
+  .panel{background:var(--card);border-radius:20px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:26px 28px;text-align:left;font-family:inherit;color:var(--ink)}
+  .panel h3{margin:0 0 4px;font-size:24px}
+  .panel .note{color:var(--muted);font-size:14px;margin:0 0 16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+  .grid .full{grid-column:1/-1}
+  label{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600}
+  label.inline{flex-direction:row;align-items:center;gap:10px;font-weight:500}
+  input[type=text],input[type=number],input[type=url],select{font:inherit;font-weight:400;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+  input[type=color]{width:100%;height:42px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .panel .btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+  .panel button{font:inherit;font-size:15px;padding:10px 16px;border-radius:10px;border:1px solid var(--ink);background:#fff;color:var(--ink)}
+  .panel button.primary{background:var(--ink);color:#fff}
+  .stat{background:#f4eee4;border-radius:12px;padding:12px 14px;font-size:14px}
+  @media (max-width:600px){.grid{grid-template-columns:1fr}}
+
+  #secret{position:fixed;top:0;left:0;width:90px;height:90px;z-index:40}
+  #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 20px;border-radius:12px;font-family:inherit;font-size:15px;opacity:0;transition:opacity .3s;z-index:60;pointer-events:none;max-width:90vw}
+  #toast.show{opacity:1}
+  #printArea{display:none}
+
+  @media print{
+    @page{size:4in 6in;margin:0}
+    html,body{background:#fff;height:auto;overflow:visible}
+    body>*:not(#printArea){display:none!important}
+    #printArea{display:block!important}
+    #printArea img{width:4in;height:6in;display:block}
+  }
+</style>
+</head>
+<body>
+
+<div id="secret" aria-hidden="true"></div>
+
+<!-- ATTRACT -->
+<section class="screen active" id="attract">
+  <img class="homeLogo" id="homeLogo" src="logo.png" alt="">
+  <h1 id="titleText">photo booth</h1>
+  <p class="sub" id="subText">pick a look, then strike four poses</p>
+  <div class="looks">
+    <div class="look" data-look="bw"><div class="sw bw"></div><span>classic b&amp;w</span></div>
+    <div class="look" data-look="sepia"><div class="sw sepia"></div><span>vintage</span></div>
+    <div class="look" data-look="color"><div class="sw color"></div><span>full color</span></div>
+  </div>
+  <div class="hint">a strip prints right here ♡</div>
+</section>
+
+<!-- CAPTURE -->
+<section class="screen" id="capture">
+  <video id="video" playsinline autoplay muted></video>
+  <div id="frameGuide"></div>
+  <div id="shotLabel"></div>
+  <div id="count"></div>
+  <div id="thumbs"></div>
+  <div id="flash"></div>
+</section>
+
+<!-- REVIEW -->
+<section class="screen" id="review">
+  <div class="stripWrap"><img id="reviewImg" alt="Your photo strip"></div>
+  <div class="reviewSide">
+    <h2>looking good!</h2>
+    <button class="btn" id="printBtn">print my strip ♡</button>
+    <button class="btn ghost" id="retakeBtn">retake</button>
+    <div id="autoNote"></div>
+  </div>
+</section>
+
+<!-- PRINTING -->
+<section class="screen" id="printing">
+  <div class="chute"></div>
+  <div class="chuteWin"><img id="dropImg" alt=""></div>
+  <div id="printMsg">developing…</div>
+  <div id="printSub">your strip will slide out of the printer in about a minute</div>
+  <div class="row" id="printActions"></div>
+</section>
+
+<!-- SETTINGS -->
+<div id="settings">
+  <div class="panel">
+    <h3>Booth settings</h3>
+    <p class="note">Open this any time by tapping the top-left corner 5 times. Settings are saved on this iPad.</p>
+    <div class="grid">
+      <label>Event name (top of strip footer)<input type="text" id="s_eventName"></label>
+      <label>Second line (date, hashtag…)<input type="text" id="s_footer"></label>
+      <label>Welcome title<input type="text" id="s_title"></label>
+      <label>Welcome subtitle<input type="text" id="s_sub"></label>
+
+      <label>Print method
+        <select id="s_printMode">
+          <option value="auto">Automatic (print server if found, otherwise AirPrint)</option>
+          <option value="server">Print server only (fully automatic)</option>
+          <option value="airprint">AirPrint via share sheet (guest taps Print)</option>
+          <option value="none">Don't print (preview / download only)</option>
+        </select>
+      </label>
+      <label>Print server address<input type="url" id="s_serverUrl" placeholder="blank = this page's server"></label>
+      <label>Copies per print (each sheet = 2 strips)<input type="number" id="s_copies" min="1" max="5"></label>
+      <label>Seconds to wait on "printing" screen<input type="number" id="s_printWait" min="10" max="180"></label>
+
+      <label>Countdown seconds per photo<input type="number" id="s_countdown" min="1" max="10"></label>
+      <label>Pause between photos (seconds)<input type="number" id="s_between" min="0" max="5" step="0.5"></label>
+      <label>Camera
+        <select id="s_camera">
+          <option value="user">Front (selfie) camera</option>
+          <option value="environment">Back camera</option>
+        </select>
+      </label>
+      <label>Auto-print after review (seconds, 0 = off)<input type="number" id="s_autoPrint" min="0" max="60"></label>
+      <label>Back to start if idle (seconds)<input type="number" id="s_idle" min="10" max="600"></label>
+      <label class="inline"><input type="checkbox" id="s_mirror"> Mirror photos (like a mirror)</label>
+
+      <label>Strip background<input type="color" id="s_bg"></label>
+      <label>Strip text color<input type="color" id="s_fg"></label>
+      <label class="full">Logo (start screen + strip footer; replaces the event name on the strip). PNG with transparency works best.
+        <input type="file" id="s_logo" accept="image/*">
+      </label>
+      <label>Logo size on strip (%)<input type="number" id="s_logoSize" min="50" max="150" step="10"></label>
+      <div class="row" style="justify-content:flex-start;gap:10px;align-items:flex-end">
+        <button id="defaultLogo">Use built-in logo</button>
+        <button id="clearLogo">No logo</button>
+      </div>
+      <div class="full stat" id="statBox"></div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="saveSettings">Save &amp; close</button>
+      <button id="testPrint">Print test sheet</button>
+      <button id="downloadLast">Download last strip</button>
+      <button id="resetCount">Reset paper counter</button>
+      <button id="fullscreenBtn">Full screen</button>
+    </div>
+  </div>
+</div>
+
+<div id="printArea"><img id="printImg" alt=""></div>
+<div id="toast"></div>
+<canvas id="work" style="display:none"></canvas>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- settings ----------
+  const DEFAULTS = {
+    eventName: 'photo booth', footer: '', title: 'photo booth', sub: 'pick a look, then strike four poses',
+    printMode: 'auto', serverUrl: '', copies: 1, printWait: 45,
+    countdown: 3, between: 1, camera: 'user', autoPrint: 10, idle: 60, mirror: true,
+    bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100
+  };
+  const store = {
+    get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+    set(k,v){ try { localStorage.setItem(k,v); return true; } catch(e){ return false; } }
+  };
+  let cfg = Object.assign({}, DEFAULTS);
+  try { Object.assign(cfg, JSON.parse(store.get('booth.cfg') || '{}')); } catch(e){}
+  let sheetsPrinted = parseInt(store.get('booth.sheets') || '0', 10) || 0;
+  let totalSessions = parseInt(store.get('booth.sessions') || '0', 10) || 0;
+
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function toast(msg, ms=3500){
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  function logoSrc(){
+    if (cfg.logo === 'none') return null;
+    if (!cfg.logo || cfg.logo === 'default') return 'logo.png';
+    return cfg.logo;
+  }
+  function applyText(){
+    const hl = $('homeLogo'), src = logoSrc();
+    if (src) { hl.src = src; hl.style.display = ''; } else hl.style.display = 'none';
+    $('titleText').textContent = cfg.title || 'photo booth';
+    $('subText').textContent = cfg.sub || '';
+  }
+
+  // ---------- screens ----------
+  let current = 'attract';
+  function show(id){
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+    current = id;
+    bumpIdle();
+  }
+
+  // ---------- idle reset ----------
+  let idleTimer;
+  function bumpIdle(){
+    clearTimeout(idleTimer);
+    if (current === 'review') {
+      idleTimer = setTimeout(() => { if (current === 'review' && !autoTimer) goHome(); }, (cfg.idle||60)*1000);
+    }
+  }
+  document.addEventListener('pointerdown', bumpIdle, {passive:true});
+
+  // ---------- camera ----------
+  let stream = null;
+  const video = $('video');
+  async function ensureCamera(){
+    if (stream && stream.active) return;
+    if (!window.isSecureContext) throw new Error('The camera needs a secure (https) page. Open the booth through the print server\u2019s https:// address.');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('This browser can\u2019t access the camera.');
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: cfg.camera, width: { ideal: 1920 }, height: { ideal: 1440 } }
+    });
+    video.srcObject = stream;
+    await video.play().catch(()=>{});
+    await new Promise(r => { if (video.videoWidth) r(); else video.onloadedmetadata = () => r(); });
+  }
+  function stopCamera(){
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  }
+  function layoutGuide(){
+    // show the 4:3 area that will actually be captured
+    const vw = innerWidth, vh = innerHeight, sw = video.videoWidth || 4, sh = video.videoHeight || 3;
+    const scale = Math.max(vw/sw, vh/sh); const dw = sw*scale, dh = sh*scale;
+    let cw = dw, ch = dw*3/4; if (ch > dh) { ch = dh; cw = dh*4/3; }
+    cw = Math.min(cw, vw); ch = Math.min(ch, vh);
+    const g = $('frameGuide');
+    g.style.width = cw+'px'; g.style.height = ch+'px';
+    g.style.left = (vw-cw)/2+'px'; g.style.top = (vh-ch)/2+'px';
+  }
+  addEventListener('resize', layoutGuide);
+
+  // ---------- capture ----------
+  const SHOT_W = 1056, SHOT_H = 792; // 2x the 528x396 print slot
+  function grabFrame(look){
+    const c = document.createElement('canvas'); c.width = SHOT_W; c.height = SHOT_H;
+    const ctx = c.getContext('2d');
+    const sw = video.videoWidth, sh = video.videoHeight;
+    let cw = sw, ch = sw*3/4; if (ch > sh) { ch = sh; cw = sh*4/3; }
+    const sx = (sw-cw)/2, sy = (sh-ch)/2;
+    ctx.save();
+    if (cfg.mirror && cfg.camera === 'user') { ctx.translate(SHOT_W, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(video, sx, sy, cw, ch, 0, 0, SHOT_W, SHOT_H);
+    ctx.restore();
+    applyLook(ctx, SHOT_W, SHOT_H, look);
+    return c;
+  }
+
+  function applyLook(ctx, w, h, look){
+    if (look === 'color') {
+      // gentle warmth + contrast
+      const img = ctx.getImageData(0,0,w,h), d = img.data;
+      for (let i=0;i<d.length;i+=4){
+        d[i]   = clamp((d[i]-128)*1.06+128+6);
+        d[i+1] = clamp((d[i+1]-128)*1.06+128+2);
+        d[i+2] = clamp((d[i+2]-128)*1.06+128-4);
+      }
+      ctx.putImageData(img,0,0);
+      return;
+    }
+    const img = ctx.getImageData(0,0,w,h), d = img.data;
+    for (let i=0;i<d.length;i+=4){
+      let l = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+      if (look === 'bw') {
+        l = clamp((l-128)*1.18+128+4);
+        d[i]=d[i+1]=d[i+2]=l;
+      } else { // sepia
+        l = clamp((l-128)*1.08+128+6);
+        d[i]   = clamp(l*1.07 + 18);
+        d[i+1] = clamp(l*0.95 + 8);
+        d[i+2] = clamp(l*0.78 - 4);
+      }
+    }
+    ctx.putImageData(img,0,0);
+    // soft vignette + light grain for the vintage look
+    const g = ctx.createRadialGradient(w/2,h/2,Math.min(w,h)*0.35,w/2,h/2,Math.max(w,h)*0.72);
+    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1, look==='sepia' ? 'rgba(40,22,8,.42)' : 'rgba(0,0,0,.32)');
+    ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+    if (look === 'sepia') {
+      const n = ctx.getImageData(0,0,w,h), nd = n.data;
+      for (let i=0;i<nd.length;i+=4){ const r=(Math.random()-0.5)*14; nd[i]=clamp(nd[i]+r); nd[i+1]=clamp(nd[i+1]+r); nd[i+2]=clamp(nd[i+2]+r); }
+      ctx.putImageData(n,0,0);
+    }
+  }
+  function clamp(v){ return v<0?0:v>255?255:v; }
+
+  // ---------- strip composition ----------
+  // Sheet = 4x6in @300dpi (1200x1800) holding two identical 2x6 strips. Cut down the middle.
+  const SHEET_W = 1200, SHEET_H = 1800, STRIP_W = 600;
+  const M = 36, PW = 528, PH = 396, GAP = 18, SIDE = (600 - 528) / 2; // photos as large as the 2x6 strip allows, with safe margins
+  let logoImg = null;
+  function loadLogo(){
+    logoImg = null;
+    const src = logoSrc();
+    if (!src) return Promise.resolve();
+    return new Promise(r => { const i = new Image(); i.onload = () => { logoImg = i; r(); }; i.onerror = () => r(); i.src = src; });
+  }
+
+  function drawStrip(ctx, x0, shots){
+    ctx.fillStyle = cfg.bg; ctx.fillRect(x0, 0, STRIP_W, SHEET_H);
+    for (let i=0;i<4;i++){
+      const y = M + i*(PH+GAP);
+      if (shots[i]) ctx.drawImage(shots[i], x0+SIDE, y, PW, PH);
+      else { ctx.fillStyle = '#ccc'; ctx.fillRect(x0+SIDE, y, PW, PH); }
+    }
+    // footer: logo (or event name) + optional second line, centred in the space under the photos
+    const fy = M + 4*PH + 3*GAP + 14;  // ~1688
+    const bottom = SHEET_H - 26;       // keep clear of the borderless crop
+    const cx = x0 + STRIP_W/2;
+    const hasFooter = !!(cfg.footer && cfg.footer.trim());
+    const k = (cfg.logoSize || 100) / 100;
+    let lw = 0, lh = 0;
+    if (logoImg) { const s = Math.min(200*k / logoImg.width, 44*k / logoImg.height); lw = logoImg.width*s; lh = logoImg.height*s; }
+    const nameH = (!logoImg && cfg.eventName) ? 34 : 0;
+    const topH = lh || nameH, footH = hasFooter ? 18 : 0, gap = topH && footH ? 14 : 0;
+    let y = fy + Math.max(0, (bottom - fy - (topH + gap + footH)) / 2);
+    ctx.fillStyle = cfg.fg; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    if (logoImg) ctx.drawImage(logoImg, cx - lw/2, y, lw, lh);
+    else if (nameH) fitText(ctx, cfg.eventName, cx, y, PW, 34, '600', INTER, -0.5);
+    y += topH + gap;
+    if (footH) { ctx.globalAlpha = 0.7; fitText(ctx, cfg.footer, cx, y, PW, 18, '500', INTER, 2.5); ctx.globalAlpha = 1; }
+  }
+  const INTER = 'Inter, -apple-system, "Helvetica Neue", Arial, sans-serif';
+  async function ensureFonts(){
+    try { await Promise.all(['600 34px Inter','500 18px Inter','600 120px Inter'].map(f => document.fonts.load(f))); } catch(e){}
+  }
+  function fitText(ctx, text, x, y, maxW, size, style, family, spacing){
+    let s = size;
+    const set = () => ctx.font = `${style} ${s}px ${family}`;
+    set();
+    while (ctx.measureText(text).width > maxW && s > 12) { s -= 2; set(); }
+    if (spacing != null && 'letterSpacing' in ctx) ctx.letterSpacing = spacing + 'px';
+    ctx.fillText(text, x, y);
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  }
+
+  function composeSheet(shots){
+    const c = $('work'); c.width = SHEET_W; c.height = SHEET_H;
+    const ctx = c.getContext('2d');
+    drawStrip(ctx, 0, shots);
+    drawStrip(ctx, STRIP_W, shots);
+    // tiny cut marks at the centre line
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(600, 0); ctx.lineTo(600, 14); ctx.moveTo(600, SHEET_H-14); ctx.lineTo(600, SHEET_H); ctx.stroke();
+    const sheetURL = c.toDataURL('image/jpeg', 0.95);
+    // single-strip preview
+    const p = document.createElement('canvas'); p.width = STRIP_W; p.height = SHEET_H;
+    p.getContext('2d').drawImage(c, 0, 0, STRIP_W, SHEET_H, 0, 0, STRIP_W, SHEET_H);
+    return { sheetURL, stripURL: p.toDataURL('image/jpeg', 0.9), file: dataURLToFile(sheetURL, 'photostrip.jpg') };
+  }
+  function dataURLToFile(url, name){
+    const [head, b64] = url.split(','); const bin = atob(b64); const a = new Uint8Array(bin.length);
+    for (let i=0;i<bin.length;i++) a[i] = bin.charCodeAt(i);
+    return new File([a], name, { type: head.slice(5, head.indexOf(';')) });
+  }
+
+  // ---------- session flow ----------
+  let session = null, busy = false, last = null;
+
+  async function startSession(look){
+    if (busy) return; busy = true;
+    try {
+      await ensureCamera();
+    } catch (e) {
+      busy = false; toast(e.message || 'Could not start the camera. Check camera permission in Settings › Safari.', 6000);
+      return;
+    }
+    video.classList.toggle('mirror', cfg.mirror && cfg.camera === 'user');
+    session = { look, shots: [] };
+    $('thumbs').innerHTML = '<div></div><div></div><div></div><div></div>';
+    show('capture'); layoutGuide();
+    await sleep(600);
+    for (let i=0;i<4;i++){
+      $('shotLabel').textContent = `pose ${i+1} of 4`;
+      for (let n=cfg.countdown; n>0; n--){ $('count').textContent = n; await sleep(1000); }
+      $('count').textContent = '';
+      const shot = grabFrame(look);
+      const f = $('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+      session.shots.push(shot);
+      $('thumbs').children[i].style.backgroundImage = `url(${shot.toDataURL('image/jpeg', 0.6)})`;
+      await sleep(Math.max(300, cfg.between*1000));
+    }
+    $('shotLabel').textContent = '';
+    await loadLogo(); await ensureFonts();
+    last = composeSheet(session.shots);
+    totalSessions++; store.set('booth.sessions', String(totalSessions));
+    $('reviewImg').src = last.stripURL;
+    busy = false;
+    show('review');
+    startAutoPrint();
+  }
+
+  let autoTimer = null;
+  function startAutoPrint(){
+    stopAutoPrint();
+    if (currentMode() === 'airprint') { $('autoNote').textContent = 'tap print, then choose “Print” in the menu that pops up ♡'; return; }
+    if (!cfg.autoPrint || cfg.printMode === 'none') { $('autoNote').textContent = ''; return; }
+    let left = cfg.autoPrint;
+    const tick = () => {
+      $('autoNote').textContent = `printing automatically in ${left}…`;
+      if (left-- <= 0) { stopAutoPrint(); doPrint(); return; }
+      autoTimer = setTimeout(tick, 1000);
+    };
+    tick();
+  }
+  function stopAutoPrint(){ clearTimeout(autoTimer); autoTimer = null; $('autoNote').textContent = ''; }
+
+  function currentMode(){ return cfg.printMode === 'auto' ? (serverFound ? 'server' : 'airprint') : cfg.printMode; }
+
+  async function doPrint(){
+    if (!last) return;
+    stopAutoPrint();
+    const mode = currentMode();
+    if (mode === 'airprint') {
+      // the iOS share sheet must open straight from the tap, before anything else happens
+      const printed = await printViaAirPrint();
+      if (!printed) { if (current === 'review') $('autoNote').textContent = 'no worries — tap print when you\u2019re ready'; return; }
+    }
+    $('dropImg').src = last.stripURL;
+    const d = $('dropImg'); d.classList.remove('drop'); void d.offsetWidth; d.classList.add('drop');
+    $('printMsg').textContent = 'developing…';
+    $('printSub').textContent = 'your strip will slide out of the printer in about a minute';
+    $('printActions').innerHTML = '';
+    show('printing');
+
+    let ok = true;
+    if (mode === 'server') ok = await printViaServer(last.sheetURL);
+    else if (mode === 'airprint') { /* already sent */ }
+    else { $('printSub').textContent = 'printing is turned off — strip saved for download in settings'; }
+
+    if (ok && cfg.printMode !== 'none') {
+      sheetsPrinted += cfg.copies; store.set('booth.sheets', String(sheetsPrinted));
+      const left18 = 18 - (sheetsPrinted % 18);
+      if (left18 <= 2) toast(`Heads up: about ${left18} sheet(s) left in the paper cassette`, 6000);
+    }
+    const done = document.createElement('button'); done.className = 'btn ghost'; done.textContent = 'done ♡';
+    done.onclick = goHome; $('printActions').appendChild(done);
+    clearTimeout(doPrint._t);
+    doPrint._t = setTimeout(() => { if (current === 'printing') goHome(); }, (cfg.printWait||45)*1000);
+  }
+
+  async function printViaServer(dataURL){
+    try {
+      const blob = await (await fetch(dataURL)).blob();
+      const base = (cfg.serverUrl || '').replace(/\/+$/,'');
+      const res = await fetch(base + '/print', {
+        method: 'POST', body: blob,
+        headers: { 'Content-Type': 'image/jpeg', 'X-Copies': String(cfg.copies||1) }
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.ok === false) throw new Error(j.error || ('server said ' + res.status));
+      if (j.queue > 1) $('printSub').textContent = `you're #${j.queue} in line — about ${j.queue} minute(s)`;
+      return true;
+    } catch (e) {
+      $('printMsg').textContent = 'hmm, the printer didn\u2019t answer';
+      $('printSub').textContent = 'please grab a booth helper ♡';
+      const retry = document.createElement('button'); retry.className = 'btn'; retry.textContent = 'try again';
+      retry.onclick = doPrint; $('printActions').appendChild(retry);
+      console.error(e); toast('Print error: ' + e.message, 8000);
+      return false;
+    }
+  }
+
+  // Prints the image itself through the iOS share sheet → Print. Unlike printing the page,
+  // this adds no URL / date / page-number header or footer, and iOS treats it as a photo print.
+  async function printViaAirPrint(){
+    const file = last.file;
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return true; }
+      catch (e) { if (e && e.name === 'AbortError') return false; console.warn(e); }
+    }
+    // fallback for browsers without file sharing (e.g. desktop testing)
+    const img = $('printImg'); img.src = last.sheetURL;
+    try { await img.decode(); } catch(e){}
+    window.print();
+    return true;
+  }
+
+  function goHome(){
+    stopAutoPrint(); clearTimeout(doPrint._t);
+    session = null; show('attract');
+  }
+
+  // ---------- wiring ----------
+  document.querySelectorAll('.look').forEach(el => el.addEventListener('click', () => startSession(el.dataset.look)));
+  $('printBtn').addEventListener('click', doPrint);
+  $('retakeBtn').addEventListener('click', () => { stopAutoPrint(); if (session) startSession(session.look); });
+  $('review').addEventListener('pointerdown', e => { if (autoTimer && !e.target.closest('button')) { stopAutoPrint(); $('autoNote').textContent = 'take your time ♡'; } });
+
+  // keep screen awake
+  let wakeLock = null;
+  async function keepAwake(){ try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+  document.addEventListener('pointerdown', () => { if (!wakeLock) keepAwake(); }, {once:true});
+
+  // ---------- settings panel ----------
+  let taps = [];
+  $('secret').addEventListener('pointerdown', () => {
+    const now = Date.now(); taps = taps.filter(t => now - t < 3000); taps.push(now);
+    if (taps.length >= 5) { taps = []; openSettings(); }
+  });
+  const fields = ['eventName','footer','title','sub','printMode','serverUrl','copies','printWait','countdown','between','camera','autoPrint','idle','bg','fg','logoSize'];
+  function openSettings(){
+    stopAutoPrint();
+    fields.forEach(k => $('s_'+k).value = cfg[k]);
+    $('s_mirror').checked = !!cfg.mirror;
+    $('statBox').innerHTML =
+      `Sessions on this iPad: <b>${totalSessions}</b> &nbsp;·&nbsp; Sheets printed: <b>${sheetsPrinted}</b><br>` +
+      `Paper cassette holds 18 sheets → about <b>${18 - (sheetsPrinted % 18)}</b> left in the current load. ` +
+      `Ink cassettes in a 108 pack cover 36 prints each.<br>` +
+      `Print server: ${serverFound ? 'found ✓ (silent printing)' : 'not found — using AirPrint (share sheet)'} &nbsp;·&nbsp; ` +
+      `Offline ready: ${navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes ✓' : 'not yet — reload once while online'}<br>` +
+      `Page is ${window.isSecureContext ? 'secure ✓ (camera allowed)' : '<b>not secure ✗ — camera will not work</b>'}`;
+    $('settings').classList.add('open');
+  }
+  function readSettings(){
+    fields.forEach(k => {
+      const el = $('s_'+k);
+      cfg[k] = el.type === 'number' ? Number(el.value) : el.value;
+    });
+    cfg.mirror = $('s_mirror').checked;
+    cfg.copies = Math.max(1, Math.min(5, cfg.copies|0 || 1));
+    cfg.countdown = Math.max(1, Math.min(10, cfg.countdown|0 || 3));
+    cfg.logoSize = Math.max(50, Math.min(150, cfg.logoSize|0 || 100));
+  }
+  function saveCfg(){
+    if (!store.set('booth.cfg', JSON.stringify(cfg))) toast('Couldn\u2019t save settings (logo may be too large)');
+  }
+  $('saveSettings').addEventListener('click', () => {
+    const prevCam = cfg.camera;
+    readSettings(); saveCfg(); applyText();
+    if (prevCam !== cfg.camera) stopCamera();
+    $('settings').classList.remove('open'); goHome();
+  });
+  $('s_logo').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      // downscale so it fits in local storage
+      const i = new Image();
+      i.onload = () => {
+        const s = Math.min(1, 1000 / i.width, 300 / i.height);
+        const c = document.createElement('canvas'); c.width = Math.round(i.width*s); c.height = Math.round(i.height*s);
+        c.getContext('2d').drawImage(i, 0, 0, c.width, c.height);
+        cfg.logo = c.toDataURL('image/png'); applyText(); toast('Logo added — tap Save');
+      };
+      i.src = r.result;
+    };
+    r.readAsDataURL(f);
+  });
+  $('clearLogo').addEventListener('click', () => { cfg.logo = 'none'; applyText(); toast('Logo off — tap Save'); });
+  $('defaultLogo').addEventListener('click', () => { cfg.logo = 'default'; applyText(); toast('Built-in logo — tap Save'); });
+  $('resetCount').addEventListener('click', () => { sheetsPrinted = 0; store.set('booth.sheets','0'); openSettings(); toast('Paper counter reset'); });
+  $('downloadLast').addEventListener('click', () => {
+    if (!last) { toast('No strip yet'); return; }
+    const a = document.createElement('a'); a.href = last.sheetURL; a.download = 'photostrip.jpg'; a.click();
+  });
+  $('testPrint').addEventListener('click', async () => {
+    readSettings(); saveCfg(); await loadLogo(); await ensureFonts();
+    const shots = [0,1,2,3].map(i => {
+      const c = document.createElement('canvas'); c.width = SHOT_W; c.height = SHOT_H;
+      const x = c.getContext('2d'); const hue = [12, 38, 170, 330][i];
+      const g = x.createLinearGradient(0,0,SHOT_W,SHOT_H); g.addColorStop(0,`hsl(${hue} 60% 75%)`); g.addColorStop(1,`hsl(${hue+40} 50% 45%)`);
+      x.fillStyle = g; x.fillRect(0,0,SHOT_W,SHOT_H);
+      x.fillStyle = 'rgba(255,255,255,.9)'; x.font = '600 120px Inter, sans-serif'; x.textAlign='center'; x.textBaseline='middle';
+      x.fillText('test ' + (i+1), SHOT_W/2, SHOT_H/2); return c;
+    });
+    last = composeSheet(shots);
+    $('settings').classList.remove('open');
+    doPrint();
+  });
+  $('fullscreenBtn').addEventListener('click', () => {
+    const el = document.documentElement;
+    (el.requestFullscreen || el.webkitRequestFullscreen || (()=>toast('Use Share › Add to Home Screen for full screen on iPad'))).call(el);
+  });
+
+  // ---------- print server discovery ----------
+  let serverFound = false;
+  async function probeServer(){
+    const base = (cfg.serverUrl || '').replace(/\/+$/,'');
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 2500);
+    try {
+      const r = await fetch(base + '/status', { cache: 'no-store', signal: ctl.signal });
+      const j = await r.json(); serverFound = !!(r.ok && j.ok);
+    } catch(e){ serverFound = false; }
+    clearTimeout(t);
+    return serverFound;
+  }
+  probeServer();
+  setInterval(probeServer, 60000);
+
+  // ---------- offline install ----------
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  applyText();
+  if (!window.isSecureContext) setTimeout(() => toast('Not a secure page — the camera won\u2019t work. Open the https:// address from the print server.', 7000), 800);
+})();
+</script>
+</body>
+</html>

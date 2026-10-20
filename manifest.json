@@ -1,0 +1,11 @@
+{
+  "name": "Photo Booth",
+  "short_name": "Photo Booth",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#faf6ef",
+  "theme_color": "#faf6ef",
+  "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }]
+}
