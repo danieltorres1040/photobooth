@@ -308,7 +308,7 @@
   addEventListener('resize', layoutGuide);
 
   // ---------- capture ----------
-  const SHOT_W = 1056, SHOT_H = 792; // 2x the 528x396 print slot
+    const SHOT_W = 1008, SHOT_H = 756; // 2x the 504x378 print slot
   function grabFrame(look){
     const c = document.createElement('canvas'); c.width = SHOT_W; c.height = SHOT_H;
     const ctx = c.getContext('2d');
@@ -364,7 +364,7 @@
   // ---------- strip composition ----------
   // Sheet = 4x6in @300dpi (1200x1800) holding two identical 2x6 strips. Cut down the middle.
   const SHEET_W = 1200, SHEET_H = 1800, STRIP_W = 600;
-  const M = 36, PW = 528, PH = 396, GAP = 18, SIDE = (600 - 528) / 2; // photos as large as the 2x6 strip allows, with safe margins
+  const M = 40, PW = 504, PH = 378, GAP = 20, SIDE = (600 - 504) / 2; // extra footer room + safe margins for borderless crop
   let logoImg = null;
   function loadLogo(){
     logoImg = null;
