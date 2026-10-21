@@ -1,6 +1,6 @@
 // Keeps the booth working offline (e.g. while the iPad is joined to the Selphy's own Wi-Fi).
 // Network-first so updates arrive when online; falls back to the cached copy when offline.
-const CACHE = 'booth-v3';  // bump this number whenever you change the files
+const CACHE = 'booth-v4';  // bump this number whenever you change the files
 const SHELL = ['./', './index.html', './manifest.json', './icon.png', './logo.png',
   './fonts/Inter-Regular.woff', './fonts/Inter-Medium.woff', './fonts/Inter-SemiBold.woff'];
 
