@@ -81,7 +81,7 @@
   .viewer{position:relative;width:min(100cqw, 133.333cqh);aspect-ratio:4/3;border-radius:24px;overflow:hidden;background:#15110e}
   #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   #video.mirror{transform:scaleX(-1)}
-  #video.look-bw{filter:grayscale(1) sepia(.28) contrast(1.08) brightness(.97)}
+  #video.look-bw{filter:grayscale(1) sepia(.2) contrast(1.18) brightness(.98)}
   #video.look-sepia{filter:sepia(.85) contrast(1.05) saturate(1.1)}
   #video.look-color{filter:saturate(1.06) contrast(1.04)}
   .vign{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(20,14,10,.38) 100%);display:none}
@@ -408,12 +408,12 @@
   }
   // warm monochrome lookup: deep brown-black shadows → neutral mids → cream highlights, slightly faded
   const BW_LUT = (() => {
-    const SH=[20,16,14], MID=[122,114,103], HI=[236,228,210], r=new Uint8ClampedArray(256), g=new Uint8ClampedArray(256), b=new Uint8ClampedArray(256);
+    const SH=[12,10,9], MID=[120,113,103], HI=[242,236,222], r=new Uint8ClampedArray(256), g=new Uint8ClampedArray(256), b=new Uint8ClampedArray(256);
     for (let i=0;i<256;i++){
       let l = i/255;
-      l = Math.pow(l, 0.9);                     // open up the mid-tones
-      l = 0.6*(l*l*(3-2*l)) + 0.4*l;           // gentle S-curve
-      l = 0.035 + l*0.93;                       // lifted blacks, soft highlights
+      l = Math.pow(l, 0.97);
+      l = 0.8*(l*l*(3-2*l)) + 0.2*l;           // crisper S-curve
+      l = 0.012 + l*0.975;                      // nearly true blacks, clean highlights
       let A, B, t; if (l < 0.5) { A=SH; B=MID; t=l/0.5; } else { A=MID; B=HI; t=(l-0.5)/0.5; }
       r[i]=A[0]+(B[0]-A[0])*t; g[i]=A[1]+(B[1]-A[1])*t; b[i]=A[2]+(B[2]-A[2])*t;
     }
@@ -468,16 +468,16 @@
     }
     if (look === 'bw') {
       // nostalgic warm black & white: soft lens, toned paper, vignette, grain
-      soften(ctx, w, h, 0.6);
+      soften(ctx, w, h, 0.82);
       const img = ctx.getImageData(0,0,w,h), d = img.data, L = BW_LUT;
       for (let i=0;i<d.length;i+=4){
         const l = (0.30*d[i] + 0.59*d[i+1] + 0.11*d[i+2]) | 0;
         d[i] = L.r[l]; d[i+1] = L.g[l]; d[i+2] = L.b[l];
       }
       ctx.putImageData(img,0,0);
-      glow(ctx, w, h, 0.22);
+      glow(ctx, w, h, 0.06);
       vignette(ctx, w, h, 'rgba(96,84,72,1)');
-      filmTexture(ctx, w, h, 1);
+      filmTexture(ctx, w, h, 0.75);
       return;
     }
     // vintage sepia
