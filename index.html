@@ -59,7 +59,7 @@
   .looks{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:clamp(18px,3vh,30px)}
   .look{display:flex;align-items:center;gap:12px;background:var(--card);border:2px solid var(--line);border-radius:999px;
     padding:8px 22px 8px 8px;cursor:pointer;transition:transform .12s, box-shadow .12s;font:inherit;color:var(--ink)}
-  .look:nth-child(1){--c:var(--mag)} .look:nth-child(2){--c:var(--cyan)} .look:nth-child(3){--c:var(--yel)}
+  .look{--c:var(--cyan)}
   .look.sel{border-color:var(--ink);box-shadow:5px 5px 0 var(--c)}
   .look:active{transform:translate(3px,3px)}
   .look .sw{width:44px;height:44px;border-radius:50%;flex:none}
@@ -75,7 +75,7 @@
     background:var(--card);font-size:14px;font-weight:600;letter-spacing:.3em;text-transform:uppercase;margin-bottom:18px;flex:none}
   .pill span{margin-right:-.3em}
   .lens{width:24px;height:24px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--mag);animation:lens 3s steps(1) infinite}
-  @keyframes lens{0%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--mag)}33%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--cyan)}66%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--yel)}}
+  @keyframes lens{0%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--mag)}33%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--cyan)}66%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--ink)}}
   .capBody{flex:1;min-height:0;width:100%;display:flex;gap:32px;align-items:stretch;justify-content:center}
   .viewWrap{flex:1;min-width:0;min-height:0;display:grid;place-items:center;container-type:size}
   .viewer{position:relative;width:min(100cqw, 133.333cqh);aspect-ratio:4/3;border-radius:24px;overflow:hidden;background:#15110e}
@@ -95,7 +95,7 @@
   #slots{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%}
   #slots div{aspect-ratio:4/3;border:2px dashed #d6cbbb;border-radius:9px;display:grid;place-items:center;font-size:16px;font-weight:500;
     color:var(--muted);background:center/cover no-repeat;transition:border-color .2s}
-  #slots div:nth-child(4n+1){--c:var(--mag)} #slots div:nth-child(4n+2){--c:var(--cyan)} #slots div:nth-child(4n+3){--c:var(--yel)} #slots div:nth-child(4n+4){--c:var(--ink)}
+  #slots div:nth-child(3n+1){--c:var(--mag)} #slots div:nth-child(3n+2){--c:var(--cyan)} #slots div:nth-child(3n+3){--c:var(--ink)}
   #slots div.now{border:3px solid var(--c);color:var(--ink)}
   #slots div.done{border:3px solid var(--c);color:transparent}
   .link{font:inherit;font-size:16px;color:var(--muted);background:none;border:0;padding:8px 12px;cursor:pointer}
@@ -123,7 +123,6 @@
   .pk.dim{opacity:.4}
   .pk .badge{position:absolute;top:6px;left:6px;width:28px;height:28px;border-radius:50%;background:var(--c);color:#fff;font-weight:600;font-size:15px;display:none;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.25)}
   .pk.on .badge{display:grid}
-  .pk.on.yel .badge{color:var(--ink)}
   .pickBtns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px}
   #autoNote{color:var(--muted);font-size:17px;min-height:24px;max-width:460px}
   .shake{animation:shake .35s}
@@ -138,7 +137,7 @@
   @keyframes drop{to{transform:translateY(0)}}
   .dots{display:flex;gap:12px;margin-top:30px}
   .dots i{width:16px;height:16px;border-radius:50%;background:var(--mag);animation:bob 1.2s ease-in-out infinite}
-  .dots i:nth-child(2){background:var(--cyan);animation-delay:.15s} .dots i:nth-child(3){background:var(--yel);animation-delay:.3s}
+  .dots i:nth-child(2){background:var(--cyan);animation-delay:.15s} .dots i:nth-child(3){background:var(--ink);animation-delay:.3s}
   @keyframes bob{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-12px)}}
   #printMsg{font-size:clamp(24px,3.2vw,34px);font-weight:600;letter-spacing:-0.03em;margin:18px 0 8px}
   #printSub{color:var(--muted);font-size:18px;margin-bottom:22px}
@@ -653,10 +652,9 @@
 
   function renderFrameList(){
     const list = $('frameList'); list.innerHTML = '';
-    const ring = ['var(--mag)', 'var(--cyan)', 'var(--yel)'];
     FRAMES.forEach((fr, i) => {
       const b = document.createElement('button'); b.className = 'frameOpt' + (i === frameSel ? ' sel' : '');
-      b.style.setProperty('--c', ring[i % 3]);
+      b.style.setProperty('--c', 'var(--mag)');
       const c = document.createElement('canvas'); c.width = 200; c.height = 600;
       const cx = c.getContext('2d'); cx.scale(200/STRIP_W, 600/SHEET_H); drawFramed(cx, 0, [], fr);
       const s = document.createElement('span'); s.textContent = fr.name;
@@ -692,7 +690,7 @@
   let session = null, busy = false, last = null;
 
   let opening = false;
-  const DOTS = ['#EC008C', '#00AEEF', '#FDFF39'];
+  const DOTS = ['#EC008C', '#00AEEF', '#FFFFFF'];
 
   async function startSession(look){
     if (busy || opening) return; opening = true;
@@ -749,7 +747,7 @@
   }
 
   // ---------- pick favourites ----------
-  const PICK_COLORS = ['var(--mag)', 'var(--cyan)', 'var(--yel)', 'var(--ink)'];
+  const PICK_COLORS = ['var(--mag)', 'var(--cyan)', 'var(--ink)'];
   function openPick(){
     const s = session, grid = $('pickGrid');
     last = null;
@@ -776,8 +774,8 @@
     const s = session, order = [...s.picked].sort((a, b) => a - b), full = order.length === s.need;
     [...$('pickGrid').children].forEach((b, i) => {
       const pos = order.indexOf(i);
-      b.classList.toggle('on', pos >= 0); b.classList.toggle('dim', full && pos < 0); b.classList.toggle('yel', pos % 4 === 2);
-      if (pos >= 0) { b.style.setProperty('--c', PICK_COLORS[pos % 4]); b.querySelector('.badge').textContent = pos + 1; }
+      b.classList.toggle('on', pos >= 0); b.classList.toggle('dim', full && pos < 0); 
+      if (pos >= 0) { b.style.setProperty('--c', PICK_COLORS[pos % 3]); b.querySelector('.badge').textContent = pos + 1; }
     });
     const shots = order.map(i => s.shots[i]);
     const pc = $('pickPreview'), px = pc.getContext('2d'); px.clearRect(0, 0, STRIP_W, SHEET_H);
