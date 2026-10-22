@@ -44,8 +44,8 @@
   h1{font-size:clamp(36px,6vh,64px);margin:0}
   .sub{margin:8px 0 0;font-size:clamp(15px,2vh,20px)}
   .sub:empty{display:none}
-  .stepLabel{display:flex;align-items:center;gap:10px;font-size:clamp(15px,1.9vh,18px);font-weight:600;letter-spacing:-0.01em;margin:0 0 12px}
-  .stepLabel b{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:14px;color:#fff;background:var(--ink)}
+  .stepLabel{display:flex;align-items:center;gap:14px;font-size:clamp(22px,3.2vh,30px);font-weight:600;letter-spacing:-0.02em;margin:0 0 14px}
+  .stepLabel b{width:clamp(36px,5vh,46px);height:clamp(36px,5vh,46px);border-radius:50%;display:grid;place-items:center;font-size:clamp(18px,2.6vh,24px);color:#fff;background:var(--ink)}
   .stepLabel.one b{background:var(--mag)} .stepLabel.two b{background:var(--cyan)}
   .frames{display:flex;gap:clamp(14px,2vw,26px);justify-content:center;flex-wrap:nowrap;max-width:100%;overflow-x:auto;padding:4px 12px 14px;margin-bottom:clamp(14px,2.2vh,24px);scrollbar-width:none}
   .frames::-webkit-scrollbar{display:none}
@@ -239,7 +239,7 @@
   <div class="chuteWin"><img id="dropImg" alt=""></div>
   <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
   <div id="printMsg">developing…</div>
-  <div id="printSub">your strip will slide out of the printer in about a minute</div>
+  <div id="printSub">photos delivered here in one minute</div>
   <div class="row" id="printActions"></div>
 </section>
 
@@ -809,7 +809,7 @@
     $('dropImg').src = last.stripURL;
     const d = $('dropImg'); d.classList.remove('drop'); void d.offsetWidth; d.classList.add('drop');
     $('printMsg').textContent = 'developing…';
-    $('printSub').textContent = 'your strip will slide out of the printer in about a minute';
+    $('printSub').textContent = 'photos delivered here in one minute';
     $('printActions').innerHTML = '';
     show('printing');
 
