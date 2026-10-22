@@ -1,0 +1,9 @@
+{
+  "frames": [
+    { "name": "now playing",     "file": "frames/now-playing.png" },
+    { "name": "luv u so matcha", "file": "frames/luv-u-so-matcha.png" },
+    { "name": "desert trip",     "file": "frames/desert-trip.png" },
+    { "name": "i got drawn",     "file": "frames/got-drawn.png" },
+    { "name": "classic",         "builtin": "classic" }
+  ]
+}

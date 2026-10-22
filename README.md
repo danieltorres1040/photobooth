@@ -1,6 +1,6 @@
 # DIY Photo Booth — iPad + Canon SELPHY CP1300
 
-Guests tap a look (b&w / vintage / color) → 3-2-1 countdown × 4 poses → strip preview → print.
+Guests pick a frame and a style (b&w / vintage / color) → press start → 8 photos → pick their favorites → print.
 Each 4×6 postcard sheet holds **two identical 2×6 strips** — cut down the middle (tick marks top and bottom).
 
 **What's in this folder**
@@ -11,7 +11,8 @@ Each 4×6 postcard sheet holds **two identical 2×6 strips** — cut down the mi
 | `logo.png` | Your logo — start screen + strip footer. Replace with your own file of the same name to change it. |
 | `fonts/` | Inter font, bundled so it works offline |
 | `sw.js`, `manifest.json`, `icon.png` | Make the booth installable and work offline |
-| `print_server.py` | Optional — only for hands-free printing from a Mac (Setup B) |
+| `start-booth.command` | Double-click on a Mac to start hands-free printing (Setup B) |
+| `print_server.py` | The program `start-booth.command` runs |
 | `README.md` | This guide |
 
 ---
@@ -86,16 +87,42 @@ Tip: in the share menu, scroll to the bottom → **Edit Actions** → add **Prin
 
 iPadOS always asks for that confirmation when a web page prints, so a booth helper (or a little "tap print!" sign) is the plan here. For no taps at all, use Setup B.
 
-### Setup B — fully hands-free (add a Mac)
+### Setup B — fully hands-free (add a MacBook)
 ```
-iPad  ──Wi-Fi──▶  Mac running print_server.py  ──▶  SELPHY CP1300   (no taps)
+iPad  ──same Wi-Fi──▶  MacBook (start-booth)  ──▶  SELPHY CP1300   (no taps)
 ```
-1. Put the Mac on the same network as the iPad and Selphy (the Selphy's own network, or a travel router — see note), and add the printer: System Settings → Printers & Scanners → Add Printer → SELPHY. Test-print a photo from Photos at *Postcard* size.
-2. Copy this folder to the Mac. In Terminal, in this folder: `python3 print_server.py` (`--list` shows printer names and paper sizes).
-3. It shows an address like `https://192.168.x.x:8443/` — open that on the iPad (accept the one-time certificate warning: *Show Details → visit this website*).
-4. The booth finds the server by itself (settings shows **Print server: found ✓**) and prints silently. Every sheet is also saved in `strips/` on the Mac.
+1. Put the `photobooth` folder somewhere easy on the Mac, e.g. the Desktop.
+2. Join the Mac to the **same Wi-Fi as the Selphy** and add the printer: System Settings → Printers & Scanners → **Add Printer…** → pick the SELPHY → Add. Print one photo from the Photos app at *Postcard* size to confirm.
+3. Double-click **start-booth.command**. First time only: if macOS blocks it, go to System Settings → Privacy & Security → scroll down → **Open Anyway**, then double-click again. Leave the window open.
+4. The window shows a line like `On the iPad, open: https://192.168.x.x:8443/`.
+5. iPad on the **same Wi-Fi** → Safari → type that address exactly → **Show Details → visit this website → Visit Website** (one time) → tap a look → **Allow** camera.
+6. Settings (top-left corner 5×) should say **Print server: found ✓**. Tap **Print test sheet** — it prints with no taps.
+7. Share → **Add to Home Screen** to get a booth icon for this address.
 
-Note: some printer direct-connect networks don't let two devices talk to each other. If the iPad can't open the Mac's address, use a small travel router (e.g. GL.iNet) for all three devices — the Selphy only does 2.4 GHz 802.11b/g.
+Use the Mac's address, not the GitHub address, for hands-free mode. If the iPad can't open the Mac's address on the Selphy's own network, put all three on one regular network instead (home Wi-Fi, a travel router like GL.iNet, or an iPhone hotspot with "Maximize Compatibility" on), add the Selphy to it from its Wi-Fi menu, and redo steps 2–5.
+
+---
+
+## Frames
+
+The booth shows every frame listed in **`frames.json`**. Guests pick a frame and a style, take 8 photos, then pick their favorites. The number of favorites equals the number of photo windows in the frame (your current frames have 3; the built-in "classic" frame has 4). Favorites always print top to bottom in the order they were taken.
+
+### Making a new frame (Illustrator)
+1. Artboard **2 × 6 in** (or any 1:3 size). Keep text and important art at least **0.1 in** from every edge; the printer trims a hair off.
+2. Leave the photo windows **empty** (no white box behind them). Photos show through wherever the PNG is transparent. Windows are found automatically, top to bottom. Art may overlap a window (stars, cats…); it prints on top of the photo.
+3. **File → Export → Export As… → PNG**, Background: **Transparent**, resolution **300 ppi** (gives 600 × 1800 px).
+   - If you forget and export with white windows, the booth tries to detect plain white rectangles itself, but transparent is more reliable.
+4. Frames that aren't exactly 1:3 still work: they're shrunk to fit, never cropped or stretched, and the leftover space is filled with the frame's edge color.
+
+### Adding it to the booth (GitHub)
+1. In your repository, open the **frames** folder → **Add file → Upload files** → drop in your PNG (e.g. `spooky.png`) → **Commit changes**.
+2. Open **frames.json** → pencil icon → add a line for it, e.g.
+   `{ "name": "spooky", "file": "frames/spooky.png" },`
+   Every line except the last needs a comma at the end. The order here is the order on the start screen. Remove a line to hide a frame.
+3. Open **sw.js** → pencil icon → bump the `booth-v…` number by one → Commit.
+4. On the iPad, on normal internet: open the booth, close it, open it again.
+
+For the MacBook (hands-free), copy the same PNG into `photobooth/frames/` and make the same `frames.json` edit there.
 
 ---
 
