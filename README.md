@@ -106,7 +106,7 @@ Use the Mac's address, not the GitHub address, for hands-free mode. If the iPad 
 
 ## Frames
 
-The booth shows every frame listed in **`frames.json`**. Guests pick a frame and a style, take 8 photos, then pick their favorites. The number of favorites equals the number of photo windows in the frame (your current frames have 3; the built-in "classic" frame has 4). Favorites always print top to bottom in the order they were taken.
+The booth shows every frame listed in **`frames.json`**. Guests pick a frame and a style, take 8 photos, then pick their favorites. The number of favorites equals the number of photo windows in the frame (all current frames, including the built-in "classic" one, have 3). Favorites always print top to bottom in the order they were taken.
 
 ### Making a new frame (Illustrator)
 1. Artboard **2 × 6 in** (or any 1:3 size). Keep text and important art at least **0.1 in** from every edge; the printer trims a hair off.

@@ -101,12 +101,6 @@
   .link{font:inherit;font-size:16px;color:var(--muted);background:none;border:0;padding:8px 12px;cursor:pointer}
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30}
   #flash.go{animation:flash .45s ease-out}
-  #flash.on{opacity:1;background:#fff6ea}
-  #flash.fade{opacity:0;background:#fff6ea;transition:opacity .4s ease-out}
-  .flashBtn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:16px;font-weight:500;padding:9px 18px;border-radius:999px;
-    border:2px solid var(--line);background:var(--card);color:var(--muted);cursor:pointer}
-  .flashBtn svg{width:16px;height:16px;fill:currentColor}
-  .flashBtn.on{border-color:var(--ink);color:var(--ink);box-shadow:4px 4px 0 var(--cyan)}
   @keyframes flash{0%{opacity:1}100%{opacity:0}}
   @media (orientation:portrait){
     .capBody{flex-direction:column;gap:22px}
@@ -225,7 +219,6 @@
     <div class="capSide">
       <h2 id="capTitle">four poses, one strip</h2>
       <div id="slots"></div>
-      <button class="flashBtn" id="flashBtn" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg><span>flash off</span></button>
       <button class="btn" id="startBtn">press to start</button>
       <button class="link" id="backBtn">← back</button>
     </div>
@@ -348,7 +341,7 @@
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
     printMode: 'auto', serverUrl: '', copies: 1, printWait: 45,
-    countdown: 3, between: 1, camera: 'user', shots: 5, flash: false, cloudName: 'f6qum3qh', uploadPreset: 'photobooth', qrOnStrip: false, qrPos: 'br', idle: 60, mirror: true,
+    countdown: 3, between: 1, camera: 'user', shots: 5, cloudName: 'f6qum3qh', uploadPreset: 'photobooth', qrOnStrip: false, qrPos: 'br', idle: 60, mirror: true,
     bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100
   };
   const store = {
@@ -423,17 +416,6 @@
     video.srcObject = stream;
     await video.play().catch(()=>{});
     await new Promise(r => { if (video.videoWidth) r(); else video.onloadedmetadata = () => r(); });
-  }
-  async function setTorch(on){
-    try {
-      const t = stream && stream.getVideoTracks()[0];
-      if (!t || !t.getCapabilities || !t.getCapabilities().torch) return false;
-      await t.applyConstraints({ advanced: [{ torch: on }] }); return true;
-    } catch (e) { return false; }
-  }
-  function renderFlash(){
-    const b = $('flashBtn'); b.classList.toggle('on', !!cfg.flash); b.setAttribute('aria-pressed', String(!!cfg.flash));
-    b.querySelector('span').textContent = cfg.flash ? 'flash on' : 'flash off';
   }
   function stopCamera(){
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
@@ -586,7 +568,7 @@
   // ---------- strip composition ----------
   // Sheet = 4x6in @300dpi (1200x1800) holding two identical 2x6 strips. Cut down the middle.
   const SHEET_W = 1200, SHEET_H = 1800, STRIP_W = 600;
-  const M = 40, PW = 504, PH = 378, GAP = 20, SIDE = (600 - 504) / 2; // extra footer room + safe margins for borderless crop
+  const M = 40, PW = 504, PH = 520, GAP = 20, SIDE = (600 - 504) / 2, CLASSIC_N = 3; // classic frame: 3 photos + footer, safe margins for borderless crop
   let logoImg = null;
   function loadLogo(){
     logoImg = null;
@@ -597,13 +579,13 @@
 
   function drawStrip(ctx, x0, shots){
     ctx.fillStyle = cfg.bg; ctx.fillRect(x0, 0, STRIP_W, SHEET_H);
-    for (let i=0;i<4;i++){
+    for (let i=0;i<CLASSIC_N;i++){
       const y = M + i*(PH+GAP);
-      if (shots[i]) ctx.drawImage(shots[i], x0+SIDE, y, PW, PH);
+      if (shots[i]) drawCover(ctx, shots[i], x0+SIDE, y, PW, PH);
       else { ctx.fillStyle = '#ccc'; ctx.fillRect(x0+SIDE, y, PW, PH); }
     }
     // footer: logo (or event name) + optional second line, centred in the space under the photos
-    const fy = M + 4*PH + 3*GAP + 14;  // ~1688
+    const fy = M + CLASSIC_N*PH + (CLASSIC_N-1)*GAP + 14;  // ~1654
     const bottom = SHEET_H - 26;       // keep clear of the borderless crop
     const cx = x0 + STRIP_W/2;
     const hasFooter = !!(cfg.footer && cfg.footer.trim());
@@ -637,7 +619,7 @@
   // frames.json lists the designs. Each is a PNG (ideally 600x1800 = 2x6in) with TRANSPARENT photo windows.
   // Windows are found automatically; photos fill them top to bottom. White windows also work as a fallback.
   let FRAMES = [], frameSel = 0, lookSel = 'bw';
-  const CLASSIC = { name: 'classic', builtin: true, n: 4 };
+  const CLASSIC = { name: 'classic', builtin: true, n: 3 };
 
   async function loadFrames(){
     let list = [];
@@ -735,7 +717,7 @@
     ctx.drawImage(fr.canvas, x0 + F.x, F.y, F.w, F.h);
     ctx.restore();
   }
-  function frameN(fr){ return fr.builtin ? 4 : fr.n; }
+  function frameN(fr){ return fr.builtin ? CLASSIC_N : fr.n; }
 
   function renderFrameList(){
     const list = $('frameList'); list.innerHTML = '';
@@ -799,14 +781,14 @@
     for (let i=0;i<total;i++){ const d = document.createElement('div'); d.textContent = i+1; slots.appendChild(d); }
     $('capTitle').textContent = `${total} poses — you'll pick your best ${need}`;
     $('count').textContent = '';
-    $('startBtn').style.visibility = ''; $('backBtn').style.visibility = ''; $('flashBtn').style.visibility = ''; renderFlash();
+    $('startBtn').style.visibility = ''; $('backBtn').style.visibility = '';
     show('capture');
   }
 
   async function runShots(){
     if (!session || session.running || busy) return;
     session.running = true; busy = true; bumpIdle();
-    $('startBtn').style.visibility = 'hidden'; $('backBtn').style.visibility = 'hidden'; $('flashBtn').style.visibility = 'hidden';
+    $('startBtn').style.visibility = 'hidden'; $('backBtn').style.visibility = 'hidden';
     const slots = $('slots').children, count = $('count'), T = session.total;
     for (let i=0;i<T;i++){
       $('capTitle').textContent = `pose ${i+1} of ${T}`;
@@ -817,19 +799,8 @@
         await sleep(1000);
       }
       count.textContent = '';
-      const f = $('flash'); let raw;
-      if (cfg.flash) {
-        // light the face: camera light if this camera has one, otherwise a bright warm-white screen
-        const torch = await setTorch(true);
-        if (!torch) { f.className = 'on'; }
-        await sleep(torch ? 350 : 180);
-        raw = rawFrame();
-        if (torch) setTorch(false);
-        f.className = 'on'; void f.offsetWidth; f.className = 'fade';
-      } else {
-        raw = rawFrame();
-        f.className = ''; void f.offsetWidth; f.className = 'go';
-      }
+      const raw = rawFrame();
+      const f = $('flash'); f.className = ''; void f.offsetWidth; f.className = 'go';
       await sleep(30);
       const shot = processFrame(raw, session.look);
       session.shots.push(shot);
@@ -980,7 +951,6 @@
   $('printBtn').addEventListener('click', doPrint);
   $('retakeBtn').addEventListener('click', () => { stopAutoPrint(); if (session) startSession(session.look); });
   $('startBtn').addEventListener('click', runShots);
-  $('flashBtn').addEventListener('click', () => { cfg.flash = !cfg.flash; saveCfg(); renderFlash(); });
   $('backBtn').addEventListener('click', goHome);
 
   // keep screen awake
