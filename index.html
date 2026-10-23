@@ -348,7 +348,7 @@
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
     printMode: 'auto', serverUrl: '', copies: 1, printWait: 45,
-    countdown: 3, between: 1, camera: 'user', shots: 5, flash: false, cloudName: '', uploadPreset: '', qrOnStrip: false, qrPos: 'br', idle: 60, mirror: true,
+    countdown: 3, between: 1, camera: 'user', shots: 5, flash: false, cloudName: 'f6qum3qh', uploadPreset: 'photobooth', qrOnStrip: false, qrPos: 'br', idle: 60, mirror: true,
     bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100
   };
   const store = {
@@ -358,9 +358,14 @@
   let cfg = Object.assign({}, DEFAULTS);
   try { Object.assign(cfg, JSON.parse(store.get('booth.cfg') || '{}')); } catch(e){}
   if (cfg.sub === 'pick a look, then strike four poses') cfg.sub = '';  // old default
-  if ((cfg.v|0) < 3) { cfg.shots = 5; cfg.v = 3; }  // now 5 photos per session
+  if ((cfg.v|0) < 3) { cfg.shots = 5; }  // now 5 photos per session
   if (!cfg.shots) cfg.shots = 5;
   if (cfg.title === 'photo booth') cfg.title = 'PHOTOBOOTH';  // old default saved on the iPad
+  if ((cfg.v|0) < 4) {  // turn digital copies on by default (once; blank fields later = off)
+    if (!cfg.cloudName) cfg.cloudName = DEFAULTS.cloudName;
+    if (!cfg.uploadPreset) cfg.uploadPreset = DEFAULTS.uploadPreset;
+    cfg.v = 4;
+  }
   let sheetsPrinted = parseInt(store.get('booth.sheets') || '0', 10) || 0;
   let totalSessions = parseInt(store.get('booth.sessions') || '0', 10) || 0;
 
