@@ -41,7 +41,7 @@
   #attract{gap:0}
   .homeHead{display:flex;flex-direction:column;align-items:center;margin-bottom:clamp(14px,2.4vh,26px)}
   .homeLogo{height:clamp(64px,10.5vh,120px);width:auto;max-width:80vw;margin-bottom:14px;display:block}
-  h1{font-size:clamp(36px,6vh,64px);margin:0}
+  h1{font-size:clamp(18px,3vh,32px);font-weight:400;letter-spacing:.22em;margin:0 0 0 .22em}
   .sub{margin:8px 0 0;font-size:clamp(15px,2vh,20px)}
   .sub:empty{display:none}
   .stepLabel{display:flex;align-items:center;gap:14px;font-size:clamp(22px,3.2vh,30px);font-weight:600;letter-spacing:-0.02em;margin:0 0 14px}
@@ -74,14 +74,14 @@
   .pill{display:inline-flex;align-items:center;gap:18px;padding:10px 24px;border:1.5px solid var(--line);border-radius:999px;
     background:var(--card);font-size:14px;font-weight:600;letter-spacing:.3em;text-transform:uppercase;margin-bottom:18px;flex:none}
   .pill span{margin-right:-.3em}
-  .lens{width:24px;height:24px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--mag);animation:lens 3s steps(1) infinite}
-  @keyframes lens{0%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--mag)}33%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--cyan)}66%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--ink)}}
+  .lens{width:24px;height:24px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--mag);animation:lens 2s steps(1) infinite}
+  @keyframes lens{0%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--mag)}50%{box-shadow:0 0 0 4px var(--card),0 0 0 6.5px var(--cyan)}}
   .capBody{flex:1;min-height:0;width:100%;display:flex;gap:32px;align-items:stretch;justify-content:center}
   .viewWrap{flex:1;min-width:0;min-height:0;display:grid;place-items:center;container-type:size}
   .viewer{position:relative;width:min(100cqw, 133.333cqh);aspect-ratio:4/3;border-radius:24px;overflow:hidden;background:#15110e}
   #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   #video.mirror{transform:scaleX(-1)}
-  #video.look-bw{filter:grayscale(1) sepia(.2) contrast(1.18) brightness(.98)}
+  #video.look-bw{filter:grayscale(1) sepia(.2) contrast(1.35) brightness(.98)}
   #video.look-sepia{filter:grayscale(1) sepia(.4) contrast(1.3) brightness(1.02)}
   #video.look-color{filter:saturate(1.06) contrast(1.04)}
   .vign{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(20,14,10,.38) 100%);display:none}
@@ -94,7 +94,7 @@
   #slots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
   #slots div{aspect-ratio:4/3;border:2px dashed #d6cbbb;border-radius:9px;display:grid;place-items:center;font-size:16px;font-weight:500;
     color:var(--muted);background:center/cover no-repeat;transition:border-color .2s}
-  #slots div:nth-child(3n+1){--c:var(--mag)} #slots div:nth-child(3n+2){--c:var(--cyan)} #slots div:nth-child(3n+3){--c:var(--ink)}
+  #slots div:nth-child(odd){--c:var(--mag)} #slots div:nth-child(even){--c:var(--cyan)}
   #slots div.now{border:3px solid var(--c);color:var(--ink)}
   #slots div.done{border:3px solid var(--c);color:transparent}
   .link{font:inherit;font-size:16px;color:var(--muted);background:none;border:0;padding:8px 12px;cursor:pointer}
@@ -142,7 +142,7 @@
   @keyframes drop{to{transform:translateY(0)}}
   .dots{display:flex;gap:12px;margin-top:30px}
   .dots i{width:16px;height:16px;border-radius:50%;background:var(--mag);animation:bob 1.2s ease-in-out infinite}
-  .dots i:nth-child(2){background:var(--cyan);animation-delay:.15s} .dots i:nth-child(3){background:var(--ink);animation-delay:.3s}
+  .dots i:nth-child(2){background:var(--cyan);animation-delay:.15s} .dots i:nth-child(3){background:var(--yel);animation-delay:.3s}
   @keyframes bob{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-12px)}}
   #printMsg{font-size:clamp(24px,3.2vw,34px);font-weight:600;letter-spacing:-0.03em;margin:18px 0 8px}
   #printSub{color:var(--muted);font-size:18px;margin-bottom:22px}
@@ -426,12 +426,13 @@
   }
   // warm monochrome lookup: deep brown-black shadows → neutral mids → cream highlights, slightly faded
   const BW_LUT = (() => {
-    const SH=[12,10,9], MID=[120,113,103], HI=[242,236,222], r=new Uint8ClampedArray(256), g=new Uint8ClampedArray(256), b=new Uint8ClampedArray(256);
+    const SH=[5,4,3], MID=[118,111,101], HI=[248,244,234], r=new Uint8ClampedArray(256), g=new Uint8ClampedArray(256), b=new Uint8ClampedArray(256);
     for (let i=0;i<256;i++){
       let l = i/255;
       l = Math.pow(l, 0.97);
-      l = 0.8*(l*l*(3-2*l)) + 0.2*l;           // crisper S-curve
-      l = 0.012 + l*0.975;                      // nearly true blacks, clean highlights
+      l = l*l*(3-2*l);                          // full S-curve
+      l = Math.min(1, Math.max(0, 0.5 + (l-0.5)*1.18));  // extra punch: deeper blacks, brighter whites
+      l = 0.005 + l*0.99;
       let A, B, t; if (l < 0.5) { A=SH; B=MID; t=l/0.5; } else { A=MID; B=HI; t=(l-0.5)/0.5; }
       r[i]=A[0]+(B[0]-A[0])*t; g[i]=A[1]+(B[1]-A[1])*t; b[i]=A[2]+(B[2]-A[2])*t;
     }
@@ -739,7 +740,7 @@
   let session = null, busy = false, last = null;
 
   let opening = false;
-  const DOTS = ['#EC008C', '#00AEEF', '#FFFFFF'];
+  const DOTS = ['#EC008C', '#00AEEF'];
 
   async function startSession(look){
     if (busy || opening) return; opening = true;
@@ -773,7 +774,7 @@
       $('capTitle').textContent = `pose ${i+1} of ${T}`;
       slots[i].classList.add('now');
       for (let n=cfg.countdown, k=0; n>0; n--, k++){
-        count.textContent = n; count.style.color = DOTS[k % 3];
+        count.textContent = n; count.style.color = DOTS[k % 2];
         count.classList.remove('pop'); void count.offsetWidth; count.classList.add('pop');
         await sleep(1000);
       }
@@ -807,7 +808,7 @@
   }
 
   // ---------- pick favourites ----------
-  const PICK_COLORS = ['var(--mag)', 'var(--cyan)', 'var(--ink)'];
+  const PICK_COLORS = ['var(--mag)', 'var(--cyan)'];
   function openPick(){
     const s = session, grid = $('pickGrid');
     last = null;
@@ -835,7 +836,7 @@
     [...$('pickGrid').children].forEach((b, i) => {
       const pos = order.indexOf(i);
       b.classList.toggle('on', pos >= 0); b.classList.toggle('dim', full && pos < 0); 
-      if (pos >= 0) { b.style.setProperty('--c', PICK_COLORS[pos % 3]); b.querySelector('.badge').textContent = pos + 1; }
+      if (pos >= 0) { b.style.setProperty('--c', PICK_COLORS[pos % 2]); b.querySelector('.badge').textContent = pos + 1; }
     });
     const shots = order.map(i => s.shots[i]);
     const pc = $('pickPreview'), px = pc.getContext('2d'); px.clearRect(0, 0, STRIP_W, SHEET_H);
