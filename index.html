@@ -82,10 +82,9 @@
   #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   #video.mirror{transform:scaleX(-1)}
   #video.look-bw{filter:grayscale(1) sepia(.2) contrast(1.18) brightness(.98)}
-  #video.look-sepia{filter:grayscale(1) sepia(.75) contrast(1.12) saturate(1.15) brightness(.98)}
+  #video.look-sepia{filter:grayscale(1) sepia(.4) contrast(1.3) brightness(1.02)}
   #video.look-color{filter:saturate(1.06) contrast(1.04)}
   .vign{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(20,14,10,.38) 100%);display:none}
-  .viewer.vintage .vign{display:block}
   #count{position:absolute;inset:0;display:grid;place-items:center;font-size:min(26vw,240px);color:#fff;font-weight:600;letter-spacing:-0.05em;
     text-shadow:0 4px 28px rgba(0,0,0,.45);pointer-events:none;line-height:1}
   #count.pop{animation:pop .9s ease-out}
@@ -439,13 +438,17 @@
     return {r,g,b};
   })();
   const SEPIA_LUT = (() => {
-    const SH=[26,15,8], MID=[152,110,70], HI=[240,222,184], r=new Uint8ClampedArray(256), g=new Uint8ClampedArray(256), b=new Uint8ClampedArray(256);
+    // colour of each brightness level, sampled from the reference vintage photo-booth strip
+    const P = [[0,[12,4,2]],[8,[24,10,5]],[24,[35,19,9]],[40,[51,35,25]],[56,[69,52,42]],[72,[85,68,58]],[88,[100,84,74]],
+               [104,[117,101,91]],[120,[132,116,107]],[136,[147,132,123]],[152,[162,149,138]],[168,[176,165,154]],
+               [184,[191,182,172]],[200,[206,198,189]],[216,[222,215,204]],[232,[235,231,223]],[255,[248,246,241]]];
+    const r=new Uint8ClampedArray(256), g=new Uint8ClampedArray(256), b=new Uint8ClampedArray(256);
     for (let i=0;i<256;i++){
       let l = i/255;
-      l = Math.pow(l, 0.93);
-      l = 0.65*(l*l*(3-2*l)) + 0.35*l;
-      l = 0.02 + l*0.96;
-      let A, B, t; if (l < 0.5) { A=SH; B=MID; t=l/0.5; } else { A=MID; B=HI; t=(l-0.5)/0.5; }
+      l = Math.pow(l, 1.12);                       // deeper mid-tones
+      l = 0.8*(l*l*(3-2*l)) + 0.2*l;               // strong, glossy contrast
+      const v = l*255; let k = 0; while (k < P.length-2 && P[k+1][0] < v) k++;
+      const [a0, A] = P[k], [a1, B] = P[k+1], t = Math.min(1, Math.max(0, (v-a0)/(a1-a0)));
       r[i]=A[0]+(B[0]-A[0])*t; g[i]=A[1]+(B[1]-A[1])*t; b[i]=A[2]+(B[2]-A[2])*t;
     }
     return {r,g,b};
@@ -485,8 +488,35 @@
     ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = g; ctx.fillRect(0,0,w,h); ctx.restore();
   }
 
+  // soft skin: edge-aware smoothing — flattens smooth areas (skin) but leaves eyes, lips, hair edges crisp
+  function smoothSkin(ctx, w, h, strength){
+    const k = 6, t = document.createElement('canvas'); t.width = Math.round(w/k); t.height = Math.round(h/k);
+    const tc = t.getContext('2d'); tc.imageSmoothingQuality = 'high'; tc.drawImage(ctx.canvas, 0, 0, t.width, t.height);
+    const b = document.createElement('canvas'); b.width = w; b.height = h;
+    const bc = b.getContext('2d'); bc.imageSmoothingQuality = 'high'; bc.drawImage(t, 0, 0, w, h);
+    const im = ctx.getImageData(0,0,w,h), d = im.data, bd = bc.getImageData(0,0,w,h).data;
+    for (let i=0;i<d.length;i+=4){
+      const dl = Math.abs((0.3*d[i]+0.59*d[i+1]+0.11*d[i+2]) - (0.3*bd[i]+0.59*bd[i+1]+0.11*bd[i+2]));
+      let e = (dl - 7) / 30; e = e < 0 ? 0 : e > 1 ? 1 : e; e = e*e*(3-2*e);   // 0 = smooth area, 1 = edge
+      const m = strength * (1 - e);
+      d[i]   += (bd[i]   - d[i])   * m;
+      d[i+1] += (bd[i+1] - d[i+1]) * m;
+      d[i+2] += (bd[i+2] - d[i+2]) * m;
+    }
+    ctx.putImageData(im, 0, 0);
+  }
+  function mapLUT(ctx, w, h, L){
+    const img = ctx.getImageData(0,0,w,h), d = img.data;
+    for (let i=0;i<d.length;i+=4){
+      const l = (0.30*d[i] + 0.59*d[i+1] + 0.11*d[i+2]) | 0;
+      d[i] = L.r[l]; d[i+1] = L.g[l]; d[i+2] = L.b[l];
+    }
+    ctx.putImageData(img,0,0);
+  }
+
   function applyLook(ctx, w, h, look){
     if (look === 'color') {
+      smoothSkin(ctx, w, h, 0.7);
       // gentle warmth + contrast
       const img = ctx.getImageData(0,0,w,h), d = img.data;
       for (let i=0;i<d.length;i+=4){
@@ -498,29 +528,19 @@
       return;
     }
     if (look === 'bw') {
-      // nostalgic warm black & white: soft lens, toned paper, vignette, grain
-      soften(ctx, w, h, 0.82);
-      const img = ctx.getImageData(0,0,w,h), d = img.data, L = BW_LUT;
-      for (let i=0;i<d.length;i+=4){
-        const l = (0.30*d[i] + 0.59*d[i+1] + 0.11*d[i+2]) | 0;
-        d[i] = L.r[l]; d[i+1] = L.g[l]; d[i+2] = L.b[l];
-      }
-      ctx.putImageData(img,0,0);
+      // nostalgic warm black & white: soft skin, toned paper, grain
+      smoothSkin(ctx, w, h, 0.72);
+      soften(ctx, w, h, 0.85);
+      mapLUT(ctx, w, h, BW_LUT);
       glow(ctx, w, h, 0.06);
-      vignette(ctx, w, h, 'rgba(96,84,72,1)');
-      filmTexture(ctx, w, h, 0.75);
+      filmTexture(ctx, w, h, 0.65);
       return;
     }
-    // vintage: classic photo-booth sepia — rich brown shadows, warm skin, creamy highlights, smooth
-    soften(ctx, w, h, 0.8);
-    const img = ctx.getImageData(0,0,w,h), d = img.data, L = SEPIA_LUT;
-    for (let i=0;i<d.length;i+=4){
-      const l = (0.30*d[i] + 0.59*d[i+1] + 0.11*d[i+2]) | 0;
-      d[i] = L.r[l]; d[i+1] = L.g[l]; d[i+2] = L.b[l];
-    }
-    ctx.putImageData(img,0,0);
-    glow(ctx, w, h, 0.07);
-    vignette(ctx, w, h, 'rgba(170,135,100,1)');
+    // vintage: editorial photo-booth look — espresso blacks, taupe mid-tones, luminous cream highlights, strong contrast
+    smoothSkin(ctx, w, h, 0.75);
+    soften(ctx, w, h, 0.85);
+    mapLUT(ctx, w, h, SEPIA_LUT);
+    glow(ctx, w, h, 0.12);
     filmTexture(ctx, w, h, 0.35);
   }
   function clamp(v){ return v<0?0:v>255?255:v; }
