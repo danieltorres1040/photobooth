@@ -110,7 +110,7 @@
   @media (orientation:portrait){
     .capBody{flex-direction:column;gap:22px}
     .capSide{width:100%;max-width:640px;margin:0 auto}
-    #slots{grid-template-columns:repeat(6,1fr)}
+    #slots{grid-template-columns:repeat(5,1fr)}
   }
 
   /* pick favourites */
@@ -187,7 +187,7 @@
 <section class="screen active" id="attract">
   <div class="homeHead">
     <img class="homeLogo" id="homeLogo" src="logo.png" alt="">
-    <h1 id="titleText">PHOTOBOOTH</h1>
+    <h1 id="titleText">photo booth</h1>
     <p class="sub" id="subText"></p>
   </div>
   <div class="stepLabel one"><b>1</b> pick a frame</div>
@@ -317,7 +317,7 @@
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'photo booth', sub: '',
     printMode: 'auto', serverUrl: '', copies: 1, printWait: 45,
-    countdown: 3, between: 1, camera: 'user', shots: 6, flash: false, idle: 60, mirror: true,
+    countdown: 3, between: 1, camera: 'user', shots: 5, flash: false, idle: 60, mirror: true,
     bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100
   };
   const store = {
@@ -327,8 +327,8 @@
   let cfg = Object.assign({}, DEFAULTS);
   try { Object.assign(cfg, JSON.parse(store.get('booth.cfg') || '{}')); } catch(e){}
   if (cfg.sub === 'pick a look, then strike four poses') cfg.sub = '';  // old default
-  if ((cfg.v|0) < 2) { cfg.shots = 6; cfg.v = 2; }  // switched from 8 to 6 photos
-  if (!cfg.shots) cfg.shots = 6;
+  if ((cfg.v|0) < 3) { cfg.shots = 5; cfg.v = 3; }  // now 5 photos per session
+  if (!cfg.shots) cfg.shots = 5;
   let sheetsPrinted = parseInt(store.get('booth.sheets') || '0', 10) || 0;
   let totalSessions = parseInt(store.get('booth.sessions') || '0', 10) || 0;
 
@@ -752,7 +752,7 @@
     }
     opening = false;
     const frame = FRAMES[frameSel] || CLASSIC, need = frameN(frame);
-    const total = Math.max(need, Math.min(12, cfg.shots | 0 || 6));
+    const total = Math.max(need, Math.min(12, cfg.shots | 0 || 5));
     video.classList.toggle('mirror', cfg.mirror && cfg.camera === 'user');
     video.classList.remove('look-bw','look-sepia','look-color'); video.classList.add('look-' + look);
     $('viewer').classList.toggle('vintage', look !== 'color');
@@ -977,7 +977,7 @@
     cfg.copies = Math.max(1, Math.min(5, cfg.copies|0 || 1));
     cfg.countdown = Math.max(1, Math.min(10, cfg.countdown|0 || 3));
     cfg.logoSize = Math.max(50, Math.min(150, cfg.logoSize|0 || 100));
-    cfg.shots = Math.max(3, Math.min(12, cfg.shots|0 || 6));
+    cfg.shots = Math.max(3, Math.min(12, cfg.shots|0 || 5));
   }
   function saveCfg(){
     if (!store.set('booth.cfg', JSON.stringify(cfg))) toast('Couldn\u2019t save settings (logo may be too large)');
