@@ -1,7 +1,7 @@
 // Keeps the booth working offline (e.g. while the iPad is joined to the Selphy's own Wi-Fi).
 // Network-first so updates arrive when online; falls back to the cached copy when offline.
-const CACHE = 'booth-v17';  // bump this number whenever you change the files
-const SHELL = ['./', './index.html', './manifest.json', './icon.png', './logo.png', './frames.json',
+const CACHE = 'booth-v18';  // bump this number whenever you change the files
+const SHELL = ['./', './index.html', './manifest.json', './icon.png', './logo.png', './frames.json', './qr.js',
   './fonts/Inter-Regular.woff', './fonts/Inter-Medium.woff', './fonts/Inter-SemiBold.woff'];
 
 self.addEventListener('install', e => {
@@ -9,7 +9,7 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(async c => {
     await c.addAll(SHELL);
     try {
-      const list = await (await fetch('./frames.json', { cache: 'no-cache' })).json();
+      const list = await (await fetch('./frames.json', './qr.js', { cache: 'no-cache' })).json();
       await c.addAll((list.frames || []).filter(f => f.file).map(f => './' + f.file));
     } catch (err) {}
   }).then(() => self.skipWaiting()));

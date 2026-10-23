@@ -13,6 +13,7 @@ Each 4×6 postcard sheet holds **two identical 2×6 strips** — cut down the mi
 | `sw.js`, `manifest.json`, `icon.png` | Make the booth installable and work offline |
 | `start-booth.command` | Double-click on a Mac to start hands-free printing (Setup B) |
 | `print_server.py` | The program `start-booth.command` runs |
+| `qr.js` | Makes the QR codes (works offline) |
 | `README.md` | This guide |
 
 ---
@@ -126,6 +127,23 @@ For the MacBook (hands-free), copy the same PNG into `photobooth/frames/` and ma
 
 ---
 
+## Digital copies (QR code)
+
+When it's turned on, each strip is uploaded the moment the guest taps print, and a QR code appears on the printing screen (optionally also printed small on the strip). Guests scan it, the strip opens on their phone, and they tap & hold to save it.
+
+Needs **internet on the iPad**: venue Wi-Fi, or an iPhone hotspot with cellular data. Without internet, strips are saved on the iPad and uploaded automatically once it's back online, so a QR code scanned later still works.
+
+### One-time setup (free Cloudinary account)
+1. Sign up at **cloudinary.com** (free plan).
+2. Your **cloud name** is shown on the Console home / dashboard (a short code like `dxyz123ab`).
+3. Go to **Settings (gear) → Upload → Upload presets → Add upload preset**. Set **Signing mode** to **Unsigned**, give it a name (e.g. `photobooth`), **Save**.
+4. On the iPad: settings (top-left corner 5×) → **Digital copies** → enter the cloud name and preset name → **Test digital upload**. You should see "Upload works ✓".
+5. Optional: tick **Also print a small QR code on the strip** and pick its corner, then **Print test sheet** to check it doesn't cover your frame art.
+
+Notes: anyone with a strip's link can see that strip (links are random and can't be guessed). Uploaded strips appear in your Cloudinary **Media Library** where you can download or delete them all after the show. Leave the two fields blank to turn digital copies off.
+
+---
+
 ## Hidden settings (tap top-left corner 5×)
 Event name · footer line · welcome text · print method (Automatic = server if found, otherwise share-sheet AirPrint) · copies · countdown · pause between photos · front/back camera · mirror · auto-print delay (server mode) · idle timeout · strip colors · logo (built-in / upload / none) · **logo size on strip** · test print · download last strip · paper counter.
 
@@ -137,6 +155,7 @@ Event name · footer line · welcome text · print method (Automatic = server if
 - [ ] **KP-108IN** paper/ink: 108 sheets = 216 strips. Cassette holds 18 sheets (the booth warns when ~2 are left); each ink cartridge does 36.
 - [ ] Spare cassette pre-loaded, spare ink, paper trimmer
 - [ ] Good front light — a ring light makes the biggest difference
+- [ ] Using **flash**? Turn the iPad's brightness all the way up (Control Center). The flash is the screen lighting the face, so it's strongest in a dim space
 - [ ] Test sheet printed on site
 - [ ] Selphy takes ~45–60 s per sheet; plan for the line
 

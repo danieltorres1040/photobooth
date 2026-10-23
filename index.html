@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
+<script src="qr.js"></script>
 <style>
   @font-face{font-family:Inter;font-weight:400;font-style:normal;font-display:block;src:url(fonts/Inter-Regular.woff) format('woff')}
   @font-face{font-family:Inter;font-weight:500;font-style:normal;font-display:block;src:url(fonts/Inter-Medium.woff) format('woff')}
@@ -144,6 +145,15 @@
   .dots i{width:16px;height:16px;border-radius:50%;background:var(--mag);animation:bob 1.2s ease-in-out infinite}
   .dots i:nth-child(2){background:var(--cyan);animation-delay:.15s} .dots i:nth-child(3){background:var(--yel);animation-delay:.3s}
   @keyframes bob{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-12px)}}
+  #printing.hasqr{flex-direction:row;gap:6vw}
+  .prLeft{display:flex;flex-direction:column;align-items:center}
+  .qrCard{display:none;flex-direction:column;align-items:center;gap:12px;background:var(--card);border:2px solid var(--ink);border-radius:22px;
+    padding:22px 22px 18px;box-shadow:8px 8px 0 var(--cyan);max-width:320px}
+  #printing.hasqr .qrCard{display:flex}
+  .qrCard canvas{width:min(240px,30vh);height:auto;aspect-ratio:1;image-rendering:pixelated;border-radius:6px}
+  .qrT{font-size:clamp(18px,2.4vh,22px);font-weight:600;letter-spacing:-0.02em}
+  .qrS{font-size:15px;color:var(--muted);line-height:1.35;text-align:center}
+  @media (orientation:portrait){ #printing.hasqr{flex-direction:column;gap:22px} #printing.hasqr .chuteWin{height:min(40vh,600px)} }
   #printMsg{font-size:clamp(24px,3.2vw,34px);font-weight:600;letter-spacing:-0.03em;margin:18px 0 8px}
   #printSub{color:var(--muted);font-size:18px;margin-bottom:22px}
 
@@ -240,12 +250,19 @@
 
 <!-- PRINTING -->
 <section class="screen" id="printing">
+  <div class="prLeft">
   <div class="chute"></div>
   <div class="chuteWin"><img id="dropImg" alt=""></div>
   <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
   <div id="printMsg">developing…</div>
   <div id="printSub">photos delivered here in one minute</div>
   <div class="row" id="printActions"></div>
+  </div>
+  <div class="qrCard" id="qrCard">
+    <div class="qrT">scan for your digital copy</div>
+    <canvas id="qrCanvas" width="400" height="400"></canvas>
+    <div class="qrS" id="qrStatus"></div>
+  </div>
 </section>
 
 <!-- SETTINGS -->
@@ -293,11 +310,25 @@
         <button id="defaultLogo">Use built-in logo</button>
         <button id="clearLogo">No logo</button>
       </div>
+      <div class="full" style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">
+        <b style="font-size:16px">Digital copies (QR code)</b>
+        <p class="note" style="margin:4px 0 0">Needs internet on the iPad and a free Cloudinary account. Leave blank to turn off. Strips made while offline are saved and uploaded automatically once the iPad is back online.</p>
+      </div>
+      <label>Cloudinary cloud name<input type="text" id="s_cloudName" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. dxyz123ab"></label>
+      <label>Unsigned upload preset<input type="text" id="s_uploadPreset" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. photobooth"></label>
+      <label class="inline"><input type="checkbox" id="s_qrOnStrip"> Also print a small QR code on the strip</label>
+      <label>QR position on strip
+        <select id="s_qrPos">
+          <option value="br">bottom right</option><option value="bl">bottom left</option>
+          <option value="tr">top right</option><option value="tl">top left</option>
+        </select>
+      </label>
       <div class="full stat" id="statBox"></div>
     </div>
     <div class="btnrow">
       <button class="primary" id="saveSettings">Save &amp; close</button>
       <button id="testPrint">Print test sheet</button>
+      <button id="testUpload">Test digital upload</button>
       <button id="downloadLast">Download last strip</button>
       <button id="resetCount">Reset paper counter</button>
       <button id="fullscreenBtn">Full screen</button>
@@ -317,7 +348,7 @@
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
     printMode: 'auto', serverUrl: '', copies: 1, printWait: 45,
-    countdown: 3, between: 1, camera: 'user', shots: 5, flash: false, idle: 60, mirror: true,
+    countdown: 3, between: 1, camera: 'user', shots: 5, flash: false, cloudName: '', uploadPreset: '', qrOnStrip: false, qrPos: 'br', idle: 60, mirror: true,
     bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100
   };
   const store = {
@@ -329,6 +360,7 @@
   if (cfg.sub === 'pick a look, then strike four poses') cfg.sub = '';  // old default
   if ((cfg.v|0) < 3) { cfg.shots = 5; cfg.v = 3; }  // now 5 photos per session
   if (!cfg.shots) cfg.shots = 5;
+  if (cfg.title === 'photo booth') cfg.title = 'PHOTOBOOTH';  // old default saved on the iPad
   let sheetsPrinted = parseInt(store.get('booth.sheets') || '0', 10) || 0;
   let totalSessions = parseInt(store.get('booth.sessions') || '0', 10) || 0;
 
@@ -348,7 +380,7 @@
   function applyText(){
     const hl = $('homeLogo'), src = logoSrc();
     if (src) { hl.src = src; hl.style.display = ''; } else hl.style.display = 'none';
-    $('titleText').textContent = cfg.title || 'photo booth';
+    $('titleText').textContent = cfg.title || 'PHOTOBOOTH';
     $('subText').textContent = cfg.sub || '';
   }
 
@@ -719,8 +751,9 @@
     fr = fr || FRAMES[frameSel] || CLASSIC;
     const c = $('work'); c.width = SHEET_W; c.height = SHEET_H;
     const ctx = c.getContext('2d');
-    drawFramed(ctx, 0, shots, fr);
-    drawFramed(ctx, STRIP_W, shots, fr);
+    const qid = session && session.id;
+    drawFramed(ctx, 0, shots, fr); drawStripQR(ctx, 0, qid);
+    drawFramed(ctx, STRIP_W, shots, fr); drawStripQR(ctx, STRIP_W, qid);
     // tiny cut marks at the centre line
     ctx.strokeStyle = 'rgba(128,128,128,.6)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(600, 0); ctx.lineTo(600, 14); ctx.moveTo(600, SHEET_H-14); ctx.lineTo(600, SHEET_H); ctx.stroke();
@@ -756,7 +789,7 @@
     video.classList.toggle('mirror', cfg.mirror && cfg.camera === 'user');
     video.classList.remove('look-bw','look-sepia','look-color'); video.classList.add('look-' + look);
     $('viewer').classList.toggle('vintage', look !== 'color');
-    session = { look, frame, need, total, shots: [], thumbs: [], picked: new Set(), running: false };
+    session = { look, frame, need, total, shots: [], thumbs: [], picked: new Set(), running: false, id: newId() };
     const slots = $('slots'); slots.innerHTML = '';
     for (let i=0;i<total;i++){ const d = document.createElement('div'); d.textContent = i+1; slots.appendChild(d); }
     $('capTitle').textContent = `${total} poses — you'll pick your best ${need}`;
@@ -840,7 +873,7 @@
     });
     const shots = order.map(i => s.shots[i]);
     const pc = $('pickPreview'), px = pc.getContext('2d'); px.clearRect(0, 0, STRIP_W, SHEET_H);
-    drawFramed(px, 0, shots, s.frame);
+    drawFramed(px, 0, shots, s.frame); drawStripQR(px, 0, s.id);
     $('printBtn').disabled = !full;
     if (full) {
       last = composeSheet(shots, s.frame);   // ready before the tap so the share sheet opens instantly
@@ -870,7 +903,10 @@
     $('printMsg').textContent = 'developing…';
     $('printSub').textContent = 'photos delivered here in one minute';
     $('printActions').innerHTML = '';
+    const copyId = session && session.id;
+    showQR(copyId);
     show('printing');
+    sendCopy(copyId, last.stripURL);
 
     let ok = true;
     if (mode === 'server') ok = await printViaServer(last.sheetURL);
@@ -954,19 +990,22 @@
     const now = Date.now(); taps = taps.filter(t => now - t < 3000); taps.push(now);
     if (taps.length >= 5) { taps = []; openSettings(); }
   });
-  const fields = ['eventName','footer','title','sub','printMode','serverUrl','copies','printWait','countdown','between','camera','shots','idle','bg','fg','logoSize'];
+  const fields = ['eventName','footer','title','sub','printMode','serverUrl','copies','printWait','countdown','between','camera','shots','idle','bg','fg','logoSize','cloudName','uploadPreset','qrPos'];
   function openSettings(){
     stopAutoPrint();
     fields.forEach(k => $('s_'+k).value = cfg[k]);
     $('s_mirror').checked = !!cfg.mirror;
+    $('s_qrOnStrip').checked = !!cfg.qrOnStrip;
     $('statBox').innerHTML =
       `Sessions on this iPad: <b>${totalSessions}</b> &nbsp;·&nbsp; Sheets printed: <b>${sheetsPrinted}</b><br>` +
       `Paper cassette holds 18 sheets → about <b>${18 - (sheetsPrinted % 18)}</b> left in the current load. ` +
       `Ink cassettes in a 108 pack cover 36 prints each.<br>` +
       `Print server: ${serverFound ? 'found ✓ (silent printing)' : 'not found — using AirPrint (share sheet)'} &nbsp;·&nbsp; ` +
       `Offline ready: ${navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes ✓' : 'not yet — reload once while online'}<br>` +
+      `Digital copies: ${digitalOn() ? 'on' : 'off'} &nbsp;·&nbsp; waiting to upload: <b id="qCount">…</b><br>` +
       `Page is ${window.isSecureContext ? 'secure ✓ (camera allowed)' : '<b>not secure ✗ — camera will not work</b>'}`;
     $('settings').classList.add('open');
+    queueCount().then(n => { const el = $('qCount'); if (el) el.textContent = n; });
   }
   function readSettings(){
     fields.forEach(k => {
@@ -974,6 +1013,8 @@
       cfg[k] = el.type === 'number' ? Number(el.value) : el.value;
     });
     cfg.mirror = $('s_mirror').checked;
+    cfg.qrOnStrip = $('s_qrOnStrip').checked;
+    cfg.cloudName = (cfg.cloudName||'').trim(); cfg.uploadPreset = (cfg.uploadPreset||'').trim();
     cfg.copies = Math.max(1, Math.min(5, cfg.copies|0 || 1));
     cfg.countdown = Math.max(1, Math.min(10, cfg.countdown|0 || 3));
     cfg.logoSize = Math.max(50, Math.min(150, cfg.logoSize|0 || 100));
@@ -1022,14 +1063,109 @@
       x.fillStyle = 'rgba(255,255,255,.9)'; x.font = '600 120px Inter, sans-serif'; x.textAlign='center'; x.textBaseline='middle';
       x.fillText('test ' + (i+1), SHOT_W/2, SHOT_H/2); return c;
     });
+    const keep = session; session = { id: 'pb-test' };
     last = composeSheet(shots, fr);
+    session = keep;
     $('settings').classList.remove('open');
     doPrint();
+  });
+  $('testUpload').addEventListener('click', async () => {
+    readSettings(); saveCfg();
+    if (!digitalOn()) { toast('Enter the cloud name and upload preset first'); return; }
+    const c = document.createElement('canvas'); c.width = 300; c.height = 300; const x = c.getContext('2d');
+    x.fillStyle = '#EC008C'; x.fillRect(0,0,150,300); x.fillStyle = '#00AEEF'; x.fillRect(150,0,150,300);
+    const id = 'pb-test-' + newId().slice(3);
+    toast('Uploading test image…');
+    try { const j = await uploadStrip(id, dataURLToFile(c.toDataURL('image/jpeg', .9), id + '.jpg')); toast('Upload works ✓ ' + (j.secure_url || ''), 9000); }
+    catch (e) { toast('Upload failed: ' + e.message, 10000); }
   });
   $('fullscreenBtn').addEventListener('click', () => {
     const el = document.documentElement;
     (el.requestFullscreen || el.webkitRequestFullscreen || (()=>toast('Use Share › Add to Home Screen for full screen on iPad'))).call(el);
   });
+
+  // ---------- digital copies (Cloudinary + QR) ----------
+  function digitalOn(){ return !!(cfg.cloudName && cfg.uploadPreset); }
+  function newId(){
+    const a = 'abcdefghjkmnpqrstuvwxyz23456789', r = crypto.getRandomValues(new Uint8Array(10));
+    return 'pb-' + [...r].map(x => a[x % a.length]).join('');
+  }
+  function copyURL(id){ return `https://res.cloudinary.com/${encodeURIComponent(cfg.cloudName)}/image/upload/${id}.jpg`; }
+  async function uploadStrip(id, blob){
+    const fd = new FormData();
+    fd.append('file', blob, id + '.jpg'); fd.append('upload_preset', cfg.uploadPreset); fd.append('public_id', id);
+    const r = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cfg.cloudName)}/image/upload`, { method: 'POST', body: fd });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = (j.error && j.error.message) || ('upload failed (' + r.status + ')');
+      if (/already exists/i.test(msg)) return { secure_url: copyURL(id) };   // uploaded on an earlier try
+      const e = new Error(msg); e.permanent = r.status >= 400 && r.status < 500; throw e;
+    }
+    return j;
+  }
+  // offline queue (IndexedDB) — strips made without internet upload later
+  let qdb = null;
+  function qOpen(){
+    if (qdb) return Promise.resolve(qdb);
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('booth-uploads', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('q', { keyPath: 'id' });
+      r.onsuccess = () => { qdb = r.result; res(qdb); }; r.onerror = () => rej(r.error);
+    });
+  }
+  async function qTx(mode, fn){ const db = await qOpen(); return new Promise((res, rej) => { const t = db.transaction('q', mode), s = t.objectStore('q'); const out = fn(s); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); }); }
+  async function queueAdd(id, blob){ try { await qTx('readwrite', s => s.put({ id, blob, cloud: cfg.cloudName, preset: cfg.uploadPreset, t: Date.now() })); } catch(e){ console.warn(e); } }
+  async function queueCount(){ try { return await qTx('readonly', s => s.count()); } catch(e){ return 0; } }
+  let flushing = false;
+  async function flushQueue(){
+    if (flushing || !digitalOn() || !navigator.onLine) return; flushing = true;
+    try {
+      const items = await qTx('readonly', s => s.getAll()) || [];
+      for (const it of items){
+        try { await uploadStrip(it.id, it.blob); await qTx('readwrite', s => s.delete(it.id)); }
+        catch (e) { if (e.permanent && !/preset|cloud/i.test(e.message)) await qTx('readwrite', s => s.delete(it.id)); else break; }
+      }
+    } catch(e){ console.warn(e); }
+    flushing = false;
+  }
+  setInterval(flushQueue, 30000); addEventListener('online', flushQueue); setTimeout(flushQueue, 4000);
+
+  function showQR(id){
+    const card = $('printing');
+    if (!digitalOn() || !id) { card.classList.remove('hasqr'); return; }
+    card.classList.add('hasqr');
+    const c = $('qrCanvas'), x = c.getContext('2d'); x.clearRect(0,0,c.width,c.height);
+    drawQR(x, copyURL(id), 0, 0, c.width);
+    $('qrStatus').textContent = 'getting it ready…';
+  }
+  async function sendCopy(id, stripURL){
+    if (!digitalOn() || !id) return;
+    const blob = dataURLToFile(stripURL, id + '.jpg');
+    const st = $('qrStatus');
+    try {
+      const j = await uploadStrip(id, blob);
+      if (j.secure_url && !j.secure_url.includes(id)) {   // account puts uploads elsewhere: show the real link
+        const c = $('qrCanvas'); drawQR(c.getContext('2d'), j.secure_url, 0, 0, c.width);
+      }
+      st.innerHTML = 'ready ✓<br>open the link, then tap &amp; hold the photo to save it';
+    } catch (e) {
+      console.warn('upload', e);
+      if (e.permanent) { st.textContent = 'digital copy unavailable — ask a booth helper'; toast('Upload error: ' + e.message, 8000); }
+      else { await queueAdd(id, blob); st.innerHTML = 'saved ✓ — your link starts working<br>as soon as the booth is back online'; }
+    }
+  }
+  function drawStripQR(ctx, x0, id){
+    if (!cfg.qrOnStrip || !digitalOn() || !id) return;
+    const s = 150, m = 40, pos = cfg.qrPos || 'br';
+    const x = x0 + (pos[1] === 'l' ? m : STRIP_W - m - s), y = pos[0] === 't' ? m : SHEET_H - m - s;
+    ctx.save(); ctx.fillStyle = '#fff';
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x - 6, y - 6, s + 12, s + 12, 10); else ctx.rect(x - 6, y - 6, s + 12, s + 12); ctx.fill();
+    // 2-module quiet zone keeps it compact; the white card adds the rest
+    const q = makeQR(copyURL(id)), n = q.getModuleCount(), u = s / (n + 4);
+    ctx.fillStyle = '#000';
+    for (let r=0;r<n;r++) for (let c=0;c<n;c++) if (q.isDark(r,c)) ctx.fillRect(Math.floor(x + (c+2)*u), Math.floor(y + (r+2)*u), Math.ceil(u), Math.ceil(u));
+    ctx.restore();
+  }
 
   // ---------- print server discovery ----------
   let serverFound = false;
