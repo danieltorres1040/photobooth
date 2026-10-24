@@ -14,6 +14,7 @@ Each 4×6 postcard sheet holds **two identical 2×6 strips** — cut down the mi
 | `start-booth.command` | Double-click on a Mac to start hands-free printing (Setup B) |
 | `print_server.py` | The program `start-booth.command` runs |
 | `qr.js` | Makes the QR codes (works offline) |
+| `bg.mp4`, `bg-poster.jpg` | Background video (optimized for iPad) and its still image |
 | `README.md` | This guide |
 
 ---
@@ -154,6 +155,7 @@ Event name · footer line · welcome text · print method (Automatic = server if
 ## Supplies & show-day checklist
 - [ ] **KP-108IN** paper/ink: 108 sheets = 216 strips. Cassette holds 18 sheets (the booth warns when ~2 are left); each ink cartridge does 36.
 - [ ] Spare cassette pre-loaded, spare ink, paper trimmer
+- [ ] Sound effects on? Turn the iPad volume up; turn them off in settings if the room is quiet
 - [ ] Good front light — a ring light makes the biggest difference
 - [ ] Using **flash**? Turn the iPad's brightness all the way up (Control Center). The flash is the screen lighting the face, so it's strongest in a dim space
 - [ ] Test sheet printed on site

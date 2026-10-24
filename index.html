@@ -22,11 +22,18 @@
     --mag:#EC008C; --cyan:#00AEEF; --yel:#FDFF39; /* from the logo */
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;height:100%;background:var(--cream);color:var(--ink);
+  html{background:var(--cream)}
+  html,body{margin:0;height:100%;color:var(--ink);
     font-family:Inter, -apple-system, system-ui, sans-serif;overflow:hidden;touch-action:manipulation;
     -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   input,select,textarea{-webkit-user-select:text;user-select:text}
-  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+  body{background:transparent}
+  #bgVideo{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none;background:var(--cream) url(bg-poster.jpg) center/cover}
+  #bgVeil{position:fixed;inset:0;z-index:0;pointer-events:none;background:rgba(250,246,239,.12);transition:background .5s}
+  body.calm #bgVeil{background:rgba(250,246,239,.62)}
+  .homeCard{display:flex;flex-direction:column;align-items:center;max-width:100%;padding:clamp(16px,2.6vh,28px) clamp(18px,3vw,40px);border-radius:32px;
+    background:rgba(250,246,239,.5);-webkit-backdrop-filter:blur(18px) saturate(1.15);backdrop-filter:blur(18px) saturate(1.15);box-shadow:0 10px 40px rgba(43,36,32,.10)}
+  .screen{z-index:1;position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
     padding:calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px);text-align:center}
   .screen.active{display:flex}
   h1{font-weight:600;font-size:clamp(44px,8vw,92px);margin:0 0 10px;letter-spacing:-0.045em;line-height:1}
@@ -123,6 +130,7 @@
   .pk.dim{opacity:.4}
   .pk .badge{position:absolute;top:6px;left:6px;width:28px;height:28px;border-radius:50%;background:var(--c);color:#fff;font-weight:600;font-size:15px;display:none;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.25)}
   .pk.on .badge{display:grid}
+  .pk.on.yel .badge{color:var(--ink)}
   .pickBtns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px}
   #autoNote{color:var(--muted);font-size:17px;min-height:24px;max-width:460px}
   .shake{animation:shake .35s}
@@ -188,7 +196,11 @@
 <div id="secret" aria-hidden="true"></div>
 
 <!-- ATTRACT -->
+<video id="bgVideo" muted loop playsinline autoplay preload="auto" poster="bg-poster.jpg" aria-hidden="true"></video>
+<div id="bgVeil"></div>
+
 <section class="screen active" id="attract">
+  <div class="homeCard">
   <div class="homeHead">
     <img class="homeLogo" id="homeLogo" src="logo.png" alt="">
     <h1 id="titleText">PHOTOBOOTH</h1>
@@ -203,6 +215,7 @@
     <button class="look" data-look="color"><i class="sw color"></i><span>full color</span></button>
   </div>
   <button class="btn" id="nextBtn">next →</button>
+  </div>
 </section>
 
 <!-- CAPTURE -->
@@ -231,7 +244,7 @@
   <div class="stripWrap"><canvas id="pickPreview" width="600" height="1800"></canvas></div>
   <div class="pickSide">
     <h2 id="pickTitle">pick your favorites</h2>
-    <p id="pickNote">they print top to bottom in the order you took them</p>
+    <p id="pickNote">tap them in the order you want them, top to bottom</p>
     <div id="pickGrid"></div>
     <div class="pickBtns">
       <button class="btn" id="printBtn" disabled>print my strip ♡</button>
@@ -292,6 +305,7 @@
       <label>Photos taken per session<input type="number" id="s_shots" min="3" max="12"></label>
       <label>Back to start if idle (seconds)<input type="number" id="s_idle" min="10" max="600"></label>
       <label class="inline"><input type="checkbox" id="s_mirror"> Mirror photos (like a mirror)</label>
+      <label class="inline"><input type="checkbox" id="s_sound"> Sound effects</label>
 
       <label>Classic frame background<input type="color" id="s_bg"></label>
       <label>Classic frame text color<input type="color" id="s_fg"></label>
@@ -341,7 +355,7 @@
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
     printMode: 'auto', serverUrl: '', copies: 1, printWait: 45,
-    countdown: 3, between: 1, camera: 'user', shots: 5, cloudName: 'f6qum3qh', uploadPreset: 'photobooth', qrOnStrip: false, qrPos: 'br', idle: 60, mirror: true,
+    countdown: 3, between: 1, camera: 'user', shots: 5, sound: true, cloudName: 'f6qum3qh', uploadPreset: 'photobooth', qrOnStrip: false, qrPos: 'br', idle: 60, mirror: true,
     bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100
   };
   const store = {
@@ -382,13 +396,67 @@
     $('subText').textContent = cfg.sub || '';
   }
 
+  // ---------- sound effects (synthesised, so they work offline) ----------
+  const SFX = (() => {
+    let ac = null;
+    function A(){
+      if (!cfg.sound) return null;
+      if (!ac) {
+        const C = window.AudioContext || window.webkitAudioContext; if (!C) return null;
+        try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}   // play even in silent mode
+        ac = new C();
+      }
+      if (ac.state === 'suspended') ac.resume();
+      return ac;
+    }
+    function tone(f, dur, type, vol, when, to){
+      const a = A(); if (!a) return; const t = a.currentTime + (when || 0);
+      const o = a.createOscillator(), g = a.createGain(); o.type = type || 'sine';
+      o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol || .15, t + .012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + .03);
+    }
+    function noise(dur, vol, when, freq){
+      const a = A(); if (!a) return; const t = a.currentTime + (when || 0);
+      const n = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+      for (let i=0;i<n;i++) d[i] = (Math.random()*2 - 1) * (1 - i/n);
+      const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+      s.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq || 2000; f.Q.value = .8; g.gain.value = vol || .4;
+      s.connect(f); f.connect(g); g.connect(a.destination); s.start(t);
+    }
+    return {
+      unlock(){ A(); },
+      tap(){ tone(700, .07, 'sine', .10); },
+      select(){ tone(880, .09, 'triangle', .13); tone(1320, .09, 'sine', .07, .05); },
+      deselect(){ tone(600, .1, 'triangle', .11, 0, 400); },
+      nope(){ tone(200, .13, 'square', .05); },
+      tick(last){ tone(last ? 1320 : 990, .13, 'sine', .16); },
+      shutter(){ noise(.035, .55, 0, 3000); noise(.07, .4, .06, 1500); tone(140, .05, 'square', .04, .06); },
+      chime(){ [523, 659, 784, 1047].forEach((f, i) => tone(f, .32, 'sine', .11, i * .09)); }
+    };
+  })();
+  document.addEventListener('pointerdown', () => SFX.unlock(), { once: true });
+
   // ---------- screens ----------
   let current = 'attract';
   function show(id){
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
     current = id;
+    document.body.classList.toggle('calm', id !== 'attract');
+    // pause the background while the camera runs, to keep the iPad cool and smooth
+    if (id === 'capture') bg.pause(); else playBg();
     bumpIdle();
   }
+  // background video: loaded as a blob so it plays offline too (Safari needs that for cached video)
+  const bg = document.getElementById('bgVideo');
+  function playBg(){ const p = bg.play(); if (p && p.catch) p.catch(() => {}); }
+  (async () => {
+    try { const r = await fetch('bg.mp4'); if (!r.ok) throw 0; bg.src = URL.createObjectURL(await r.blob()); }
+    catch (e) { bg.src = 'bg.mp4'; }
+    playBg();
+  })();
+  document.addEventListener('pointerdown', () => { if (bg.paused && current !== 'capture') playBg(); }, { passive: true });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && current !== 'capture') playBg(); });
 
   // ---------- idle reset ----------
   let idleTimer;
@@ -568,7 +636,7 @@
   // ---------- strip composition ----------
   // Sheet = 4x6in @300dpi (1200x1800) holding two identical 2x6 strips. Cut down the middle.
   const SHEET_W = 1200, SHEET_H = 1800, STRIP_W = 600;
-  const M = 40, PW = 504, PH = 520, GAP = 20, SIDE = (600 - 504) / 2, CLASSIC_N = 3; // classic frame: 3 photos + footer, safe margins for borderless crop
+  const M = 46, PW = 496, PH = 372, GAP = 43, SIDE = (600 - 496) / 2, CLASSIC_N = 3; // classic frame: 3 photos + footer, safe margins for borderless crop
   let logoImg = null;
   function loadLogo(){
     logoImg = null;
@@ -591,7 +659,7 @@
     const hasFooter = !!(cfg.footer && cfg.footer.trim());
     const k = (cfg.logoSize || 100) / 100;
     let lw = 0, lh = 0;
-    if (logoImg) { const s = Math.min(200*k / logoImg.width, 44*k / logoImg.height); lw = logoImg.width*s; lh = logoImg.height*s; }
+    if (logoImg) { const s = Math.min(300*k / logoImg.width, 66*k / logoImg.height); lw = logoImg.width*s; lh = logoImg.height*s; }
     const nameH = (!logoImg && cfg.eventName) ? 34 : 0;
     const topH = lh || nameH, footH = hasFooter ? 18 : 0, gap = topH && footH ? 14 : 0;
     let y = fy + Math.max(0, (bottom - fy - (topH + gap + footH)) / 2);
@@ -728,7 +796,7 @@
       const cx = c.getContext('2d'); cx.scale(200/STRIP_W, 600/SHEET_H); drawFramed(cx, 0, [], fr);
       const s = document.createElement('span'); s.textContent = fr.name;
       b.append(c, s);
-      b.addEventListener('click', () => { frameSel = i; [...list.children].forEach((el, j) => el.classList.toggle('sel', j === i)); });
+      b.addEventListener('click', () => { SFX.tap(); frameSel = i; [...list.children].forEach((el, j) => el.classList.toggle('sel', j === i)); });
       list.appendChild(b);
     });
   }
@@ -776,7 +844,7 @@
     video.classList.toggle('mirror', cfg.mirror && cfg.camera === 'user');
     video.classList.remove('look-bw','look-sepia','look-color'); video.classList.add('look-' + look);
     $('viewer').classList.toggle('vintage', look !== 'color');
-    session = { look, frame, need, total, shots: [], thumbs: [], picked: new Set(), running: false, id: newId() };
+    session = { look, frame, need, total, shots: [], thumbs: [], picked: [], running: false, id: newId() };
     const slots = $('slots'); slots.innerHTML = '';
     for (let i=0;i<total;i++){ const d = document.createElement('div'); d.textContent = i+1; slots.appendChild(d); }
     $('capTitle').textContent = `${total} poses — you'll pick your best ${need}`;
@@ -794,12 +862,12 @@
       $('capTitle').textContent = `pose ${i+1} of ${T}`;
       slots[i].classList.add('now');
       for (let n=cfg.countdown, k=0; n>0; n--, k++){
-        count.textContent = n; count.style.color = DOTS[k % 2];
+        count.textContent = n; count.style.color = DOTS[k % 2]; SFX.tick(n === 1);
         count.classList.remove('pop'); void count.offsetWidth; count.classList.add('pop');
         await sleep(1000);
       }
       count.textContent = '';
-      const raw = rawFrame();
+      const raw = rawFrame(); SFX.shutter();
       const f = $('flash'); f.className = ''; void f.offsetWidth; f.className = 'go';
       await sleep(30);
       const shot = processFrame(raw, session.look);
@@ -817,7 +885,7 @@
   }
 
   // ---------- pick favourites ----------
-  const PICK_COLORS = ['var(--mag)', 'var(--cyan)'];
+  const PICK_COLORS = ['var(--mag)', 'var(--cyan)', 'var(--yel)'];
   function openPick(){
     const s = session, grid = $('pickGrid');
     last = null;
@@ -835,17 +903,18 @@
   }
   function togglePick(i, el){
     const s = session; if (!s) return;
-    if (s.picked.has(i)) s.picked.delete(i);
-    else if (s.picked.size < s.need) s.picked.add(i);
-    else { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); $('autoNote').textContent = 'tap a chosen photo to swap it out'; return; }
+    const at = s.picked.indexOf(i);
+    if (at >= 0) { s.picked.splice(at, 1); SFX.deselect(); }
+    else if (s.picked.length < s.need) { s.picked.push(i); SFX.select(); }
+    else { SFX.nope(); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); $('autoNote').textContent = 'tap a chosen photo to swap it out'; return; }
     updatePick();
   }
   function updatePick(){
-    const s = session, order = [...s.picked].sort((a, b) => a - b), full = order.length === s.need;
+    const s = session, order = s.picked.slice(), full = order.length === s.need;   // tap order = strip order
     [...$('pickGrid').children].forEach((b, i) => {
       const pos = order.indexOf(i);
-      b.classList.toggle('on', pos >= 0); b.classList.toggle('dim', full && pos < 0); 
-      if (pos >= 0) { b.style.setProperty('--c', PICK_COLORS[pos % 2]); b.querySelector('.badge').textContent = pos + 1; }
+      b.classList.toggle('on', pos >= 0); b.classList.toggle('dim', full && pos < 0); b.classList.toggle('yel', pos % 3 === 2);
+      if (pos >= 0) { b.style.setProperty('--c', PICK_COLORS[pos % 3]); b.querySelector('.badge').textContent = pos + 1; }
     });
     const shots = order.map(i => s.shots[i]);
     const pc = $('pickPreview'), px = pc.getContext('2d'); px.clearRect(0, 0, STRIP_W, SHEET_H);
@@ -881,7 +950,7 @@
     $('printActions').innerHTML = '';
     const copyId = session && session.id;
     showQR(copyId);
-    show('printing');
+    show('printing'); SFX.chime();
     sendCopy(copyId, last.stripURL);
 
     let ok = true;
@@ -943,14 +1012,15 @@
   }
 
   // ---------- wiring ----------
-  document.querySelectorAll('.look').forEach(el => el.addEventListener('click', () => { lookSel = el.dataset.look; renderLooks(); }));
+  document.querySelectorAll('.look').forEach(el => el.addEventListener('click', () => { SFX.tap(); lookSel = el.dataset.look; renderLooks(); }));
   $('nextBtn').addEventListener('click', () => {
+    SFX.tap();
     cfg.lastFrame = (FRAMES[frameSel] || {}).name; saveCfg();
     startSession(lookSel);
   });
   $('printBtn').addEventListener('click', doPrint);
   $('retakeBtn').addEventListener('click', () => { stopAutoPrint(); if (session) startSession(session.look); });
-  $('startBtn').addEventListener('click', runShots);
+  $('startBtn').addEventListener('click', () => { SFX.tap(); runShots(); });
   $('backBtn').addEventListener('click', goHome);
 
   // keep screen awake
@@ -971,6 +1041,7 @@
     fields.forEach(k => $('s_'+k).value = cfg[k]);
     $('s_mirror').checked = !!cfg.mirror;
     $('s_qrOnStrip').checked = !!cfg.qrOnStrip;
+    $('s_sound').checked = cfg.sound !== false;
     $('statBox').innerHTML =
       `Sessions on this iPad: <b>${totalSessions}</b> &nbsp;·&nbsp; Sheets printed: <b>${sheetsPrinted}</b><br>` +
       `Paper cassette holds 18 sheets → about <b>${18 - (sheetsPrinted % 18)}</b> left in the current load. ` +
@@ -989,6 +1060,7 @@
     });
     cfg.mirror = $('s_mirror').checked;
     cfg.qrOnStrip = $('s_qrOnStrip').checked;
+    cfg.sound = $('s_sound').checked;
     cfg.cloudName = (cfg.cloudName||'').trim(); cfg.uploadPreset = (cfg.uploadPreset||'').trim();
     cfg.copies = Math.max(1, Math.min(5, cfg.copies|0 || 1));
     cfg.countdown = Math.max(1, Math.min(10, cfg.countdown|0 || 3));
