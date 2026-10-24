@@ -29,8 +29,11 @@
   input,select,textarea{-webkit-user-select:text;user-select:text}
   body{background:transparent}
   #bgVideo{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none;background:var(--cream) url(bg-poster.jpg) center/cover}
+  #bgStill{position:fixed;inset:0;z-index:0;pointer-events:none;background:var(--cream) url(bg-still.jpg) center/cover;opacity:0;transition:opacity .4s}
+  body.still #bgStill{opacity:1}
   #bgVeil{position:fixed;inset:0;z-index:0;pointer-events:none;background:rgba(250,246,239,.12);transition:background .5s}
   body.calm #bgVeil{background:rgba(250,246,239,.62)}
+  body.still #bgVeil{background:rgba(250,246,239,.25)}
   .homeCard{display:flex;flex-direction:column;align-items:center;max-width:100%;padding:clamp(16px,2.6vh,28px) clamp(18px,3vw,40px);border-radius:32px;
     background:rgba(250,246,239,.5);-webkit-backdrop-filter:blur(18px) saturate(1.15);backdrop-filter:blur(18px) saturate(1.15);box-shadow:0 10px 40px rgba(43,36,32,.10)}
   .screen{z-index:1;position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
@@ -197,6 +200,7 @@
 
 <!-- ATTRACT -->
 <video id="bgVideo" muted loop playsinline autoplay preload="auto" poster="bg-poster.jpg" aria-hidden="true"></video>
+<div id="bgStill" aria-hidden="true"></div>
 <div id="bgVeil"></div>
 
 <section class="screen active" id="attract">
@@ -458,9 +462,11 @@
   function show(id){
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
     current = id;
+    // moving background on the home and developing screens; the still version everywhere else
+    const moving = id === 'attract' || id === 'printing';
     document.body.classList.toggle('calm', id !== 'attract');
-    // pause the background while the camera runs, to keep the iPad cool and smooth
-    if (id === 'capture') bg.pause(); else playBg();
+    document.body.classList.toggle('still', !moving);
+    if (moving) playBg(); else bg.pause();
     bumpIdle();
   }
   // background video: loaded as a blob so it plays offline too (Safari needs that for cached video)
@@ -471,8 +477,9 @@
     catch (e) { bg.src = 'bg.mp4'; }
     playBg();
   })();
-  document.addEventListener('pointerdown', () => { if (bg.paused && current !== 'capture') playBg(); }, { passive: true });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && current !== 'capture') playBg(); });
+  const isMoving = () => current === 'attract' || current === 'printing';
+  document.addEventListener('pointerdown', () => { if (bg.paused && isMoving()) playBg(); }, { passive: true });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && isMoving()) playBg(); });
 
   // ---------- idle reset ----------
   let idleTimer;
