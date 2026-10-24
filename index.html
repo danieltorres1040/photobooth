@@ -424,14 +424,30 @@
       s.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq || 2000; f.Q.value = .8; g.gain.value = vol || .4;
       s.connect(f); f.connect(g); g.connect(a.destination); s.start(t);
     }
+    // real shutter recording, decoded once and played instantly
+    let shutterBuf = null, loading = false;
+    function loadShutter(){
+      const a = A(); if (!a || shutterBuf || loading) return; loading = true;
+      fetch('shutter.mp3').then(r => r.arrayBuffer())
+        .then(b => new Promise((res, rej) => a.decodeAudioData(b, res, rej)))
+        .then(buf => { shutterBuf = buf; }).catch(e => { console.warn('shutter sound', e); loading = false; });
+    }
+    function playBuf(buf, vol){
+      const a = A(); if (!a) return;
+      const s = a.createBufferSource(), g = a.createGain(); s.buffer = buf; g.gain.value = vol;
+      s.connect(g); g.connect(a.destination); s.start();
+    }
     return {
-      unlock(){ A(); },
+      unlock(){ A(); loadShutter(); },
       tap(){ tone(700, .07, 'sine', .10); },
       select(){ tone(880, .09, 'triangle', .13); tone(1320, .09, 'sine', .07, .05); },
       deselect(){ tone(600, .1, 'triangle', .11, 0, 400); },
       nope(){ tone(200, .13, 'square', .05); },
       tick(last){ tone(last ? 1320 : 990, .13, 'sine', .16); },
-      shutter(){ noise(.035, .55, 0, 3000); noise(.07, .4, .06, 1500); tone(140, .05, 'square', .04, .06); },
+      shutter(){
+        if (shutterBuf) playBuf(shutterBuf, .9);
+        else { noise(.035, .55, 0, 3000); noise(.07, .4, .06, 1500); tone(140, .05, 'square', .04, .06); loadShutter(); }
+      },
       chime(){ [523, 659, 784, 1047].forEach((f, i) => tone(f, .32, 'sine', .11, i * .09)); }
     };
   })();
@@ -1020,7 +1036,7 @@
   });
   $('printBtn').addEventListener('click', doPrint);
   $('retakeBtn').addEventListener('click', () => { stopAutoPrint(); if (session) startSession(session.look); });
-  $('startBtn').addEventListener('click', () => { SFX.tap(); runShots(); });
+  $('startBtn').addEventListener('click', () => { SFX.unlock(); SFX.tap(); runShots(); });
   $('backBtn').addEventListener('click', goHome);
 
   // keep screen awake

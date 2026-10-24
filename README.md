@@ -15,6 +15,7 @@ Each 4×6 postcard sheet holds **two identical 2×6 strips** — cut down the mi
 | `print_server.py` | The program `start-booth.command` runs |
 | `qr.js` | Makes the QR codes (works offline) |
 | `bg.mp4`, `bg-poster.jpg` | Background video (optimized for iPad) and its still image |
+| `shutter.mp3` | Camera shutter sound played for each photo (replace with any short mp3 of the same name) |
 | `README.md` | This guide |
 
 ---
