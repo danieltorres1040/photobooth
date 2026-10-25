@@ -147,6 +147,59 @@ Notes: anyone with a strip's link can see that strip (links are random and can't
 
 ---
 
+## Show-day startup: hands-free printing + QR uploads
+
+Everything runs on **one iPhone hotspot**: it connects the iPad, MacBook and Selphy to each other (for hands-free printing) and gives the iPad internet (for the QR codes).
+
+**Before you leave home (once per update):** copy the newest `photobooth` folder onto the MacBook's Desktop.
+
+### 1. Power and network (5 min)
+1. Plug in the iPhone, iPad, MacBook and Selphy. Load paper and ink in the Selphy.
+2. iPhone: **Settings → Personal Hotspot** → turn on **Allow Others to Join** and **Maximize Compatibility**. Leave this screen open.
+3. Selphy: **Wi-Fi Settings → connect to the iPhone hotspot** (first time only; it remembers it after that).
+4. MacBook and iPad: join the iPhone hotspot in their Wi-Fi menus.
+
+### 2. Start the print server (MacBook)
+1. Open the `photobooth` folder and double-click **start-booth.command**. Leave the Terminal window open all session.
+2. It shows `On the iPad, open: https://172.20.10.x:8443/` — note that address.
+3. If it says "No printer found": System Settings → Printers & Scanners → add the SELPHY, then double-click start-booth again.
+
+### 3. Open the booth (iPad)
+1. Safari → type the address from step 2 exactly (with `https://` and `:8443/`). If a privacy warning appears: Show Details → visit this website → Visit Website.
+   Tip: Share → Add to Home Screen makes an icon for this address; if the Mac's address ever changes, make a new icon.
+2. Tap the top-left corner 5× to open settings and check:
+   - Print method: **Automatic** · **Print server: found ✓**
+   - **Digital copies: on** (cloud name `f6qum3qh`, preset `photobooth`)
+3. Tap **Test digital upload** → "Upload works ✓".
+4. Tap **Print test sheet** → it prints with no taps, and a QR code appears. Scan it with a phone.
+5. **Save & close.** Take one real session yourself (this also confirms camera permission).
+
+### 4. Lock it down
+- iPad: Auto-Lock **Never**, brightness and volume up, Low Power Mode **off**.
+- Triple-click the side/top button → **Guided Access** to lock the booth on screen.
+- Mac: lid open, plugged in.
+
+### During the show
+- Swap the paper cassette every 18 sheets (the booth warns when ~2 are left); ink lasts 36 prints.
+- Keep the Terminal window and the iPhone hotspot screen open.
+- If the QR status says "saved — starts working when back online", the hotspot lost internet; those strips upload automatically once it's back.
+
+### After the show
+1. On the iPad, open settings: **waiting to upload** should be **0**. If not, keep the booth open on internet for a minute.
+2. Close the Terminal window on the Mac. Every printed sheet is also saved in `photobooth/strips/`.
+3. All digital copies are in Cloudinary → **Media Library** (download or delete them there).
+
+### If something goes wrong
+| Problem | Fix |
+|---|---|
+| iPad can't open the Mac address | Mac and iPad on the hotspot? Terminal window still open? Use the address it shows *now*. |
+| "Print server: not found" | Same as above; then reload the booth page. |
+| Prints don't come out | Mac: Printers & Scanners → is the SELPHY listed and online? Selphy on the hotspot? Paper/ink seated? |
+| QR says "unavailable" | Settings → Test digital upload; send the exact error message. |
+| Camera asks for permission again | Tap Allow; it can re-ask after the iPad restarts. |
+
+---
+
 ## Hidden settings (tap top-left corner 5×)
 Event name · footer line · welcome text · print method (Automatic = server if found, otherwise share-sheet AirPrint) · copies · countdown · pause between photos · front/back camera · mirror · auto-print delay (server mode) · idle timeout · strip colors · logo (built-in / upload / none) · **logo size on strip** · test print · download last strip · paper counter.
 
