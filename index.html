@@ -731,7 +731,7 @@
   }
   function clamp(v){ return v<0?0:v>255?255:v; }
 
-  // senior show filter: soft risograph-style halftone in one show colour per photo (1st magenta, 2nd cyan, 3rd yellow)
+  // senior show filter: soft two-tone print in one show colour per photo (1st magenta, 2nd cyan, 3rd yellow)
   const SHOW_INKS = [
     { ink: [236, 96, 168], deep: [150, 52, 112] },   // soft magenta
     { ink: [0, 174, 239],  deep: [18, 52, 69] },     // cyan
@@ -741,38 +741,21 @@
   function showTint(src, pos){
     let m = tintCache.get(src); if (!m) { m = {}; tintCache.set(src, m); }
     const ci = pos % 3; if (m[ci]) return m[ci];
-    const { ink, deep } = SHOW_INKS[ci], W = src.width, H = src.height, cell = 7;
-    // brightness per halftone cell
-    const gw = Math.ceil(W/cell*1.5), gh = Math.ceil(H/cell*1.5);
-    const g = document.createElement('canvas'); g.width = gw; g.height = gh;
-    const gx = g.getContext('2d'); gx.imageSmoothingQuality = 'high'; gx.drawImage(src, 0, 0, gw, gh);
-    const gd = gx.getImageData(0, 0, gw, gh).data;
-    const lum = (x, y) => { const ix = Math.min(gw-1, Math.max(0, (x/W*gw)|0)), iy = Math.min(gh-1, Math.max(0, (y/H*gh)|0)), k = (iy*gw + ix)*4; return (0.3*gd[k] + 0.59*gd[k+1] + 0.11*gd[k+2]) / 255; };
+    const { ink, deep } = SHOW_INKS[ci], W = src.width, H = src.height;
     const c = document.createElement('canvas'); c.width = W; c.height = H;
     const x = c.getContext('2d');
     // paper with a whisper of the ink colour, plus a soft continuous tone so faces stay readable
     x.fillStyle = `rgb(${Math.round(253*0.9 + ink[0]*0.1)},${Math.round(249*0.9 + ink[1]*0.1)},${Math.round(240*0.9 + ink[2]*0.1)})`;
     x.fillRect(0, 0, W, H);
     const im = x.getImageData(0, 0, W, H), d = im.data, s = src.getContext('2d').getImageData(0, 0, W, H).data;
-    // smooth two-tone image underneath (paper → ink → deep), so the dots are just texture on top
+    // smooth two-tone image (paper → ink → deep)
     for (let i=0;i<d.length;i+=4){
       const l = (0.3*s[i] + 0.59*s[i+1] + 0.11*s[i+2]) / 255, dk = 1 - l, a = Math.min(1, dk*1.3), t = Math.pow(dk, 1.6) * 0.7;
       const cr = ink[0] + (deep[0]-ink[0])*t, cg = ink[1] + (deep[1]-ink[1])*t, cb = ink[2] + (deep[2]-ink[2])*t;
       d[i] += (cr - d[i]) * a; d[i+1] += (cg - d[i+1]) * a; d[i+2] += (cb - d[i+2]) * a;
     }
     x.putImageData(im, 0, 0);
-    // dots on a 45° screen; size follows darkness, colour deepens a little in the shadows
-    const ang = Math.PI/4, ca = Math.cos(ang), sa = Math.sin(ang), R = Math.hypot(W, H);
-    x.globalAlpha = 0.35;   // subtle dot texture
-    for (let v=-R; v<R; v+=cell) for (let u=-R; u<R; u+=cell){
-      const px = W/2 + u*ca - v*sa, py = H/2 + u*sa + v*ca;
-      if (px < -cell || py < -cell || px > W+cell || py > H+cell) continue;
-      const dark = 1 - lum(px, py); if (dark < 0.04) continue;
-      const r = cell * 0.72 * Math.sqrt(dark), t = Math.pow(dark, 1.6) * 0.75;
-      x.fillStyle = `rgb(${Math.round(ink[0] + (deep[0]-ink[0])*t)},${Math.round(ink[1] + (deep[1]-ink[1])*t)},${Math.round(ink[2] + (deep[2]-ink[2])*t)})`;
-      x.beginPath(); x.arc(px, py, r, 0, Math.PI*2); x.fill();
-    }
-    x.globalAlpha = 1;
+    filmTexture(x, W, H, 0.35);
     return (m[ci] = c);
   }
 
@@ -999,7 +982,7 @@
 
   const TINT_CSS = ['rgb(236,96,168)', 'rgb(0,174,239)', 'rgb(246,222,84)'];
   function setTint(i){ const t = $('tint'); if (t) t.style.backgroundColor = TINT_CSS[i % 3]; }
-  // senior show thumbnails: halftone in a given colour, small for the grid
+  // senior show thumbnails: tinted in a given colour, small for the grid
   const thumbCache = new Map();
   function showThumb(i, ci){
     const key = i + '-' + ci; if (thumbCache.has(key)) return thumbCache.get(key);
