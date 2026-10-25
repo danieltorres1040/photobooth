@@ -1,7 +1,7 @@
 // Keeps the booth working offline (e.g. while the iPad is joined to the Selphy's own Wi-Fi).
 // Network-first so updates arrive when online; falls back to the cached copy when offline.
-const CACHE = 'booth-v29';  // bump this number whenever you change the files
-const SHELL = ['./', './index.html', './manifest.json', './icon.png', './logo.png', './frames.json', './qr.js', './bg.mp4', './bg-poster.jpg', './bg-still.jpg', './shutter.mp3',
+const CACHE = 'booth-v30';  // bump this number whenever you change the files
+const SHELL = ['./', './index.html', './manifest.json', './icon.png', './logo.png', './frames.json', './qr.js', './bg.mp4', './bg-poster.jpg', './bg-still.jpg',
   './fonts/Inter-Regular.woff', './fonts/Inter-Medium.woff', './fonts/Inter-SemiBold.woff'];
 
 self.addEventListener('install', e => {

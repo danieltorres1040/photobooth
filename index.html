@@ -98,7 +98,9 @@
   #video.look-sepia{filter:grayscale(1) sepia(.55) contrast(1.3) brightness(1.02)}
   #video.look-color{filter:saturate(1.06) contrast(1.04)}
   #video.look-rio{filter:brightness(1.1) contrast(.92) saturate(1.2) sepia(.22) hue-rotate(-14deg)}
-  #video.look-show{filter:grayscale(1) contrast(1.15)}
+  #video.look-show{filter:grayscale(1) contrast(1.1) brightness(1.05)}
+  .tint{position:absolute;inset:0;pointer-events:none;mix-blend-mode:color;opacity:.85;display:none;transition:background-color .4s}
+  .viewer.showtint .tint{display:block}
   .vign{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(20,14,10,.38) 100%);display:none}
   #count{position:absolute;inset:0;display:grid;place-items:center;font-size:min(26vw,240px);color:#fff;font-weight:600;letter-spacing:-0.05em;
     text-shadow:0 4px 28px rgba(0,0,0,.45);pointer-events:none;line-height:1}
@@ -159,7 +161,14 @@
   .qrCard{display:none;flex-direction:column;align-items:center;gap:12px;background:var(--card);border:2px solid var(--ink);border-radius:22px;
     padding:22px 22px 18px;box-shadow:8px 8px 0 var(--cyan);max-width:320px}
   #printing.hasqr .qrCard{display:flex}
-  .qrCard canvas{width:min(240px,30vh);height:auto;aspect-ratio:1;image-rendering:pixelated;border-radius:6px}
+  .qrBox{position:relative;width:min(240px,30vh);aspect-ratio:1;border-radius:6px;background:#fff}
+  .qrCard canvas{width:100%;height:100%;display:block;image-rendering:pixelated;border-radius:6px;opacity:0;transition:opacity .35s}
+  .qrCard.ready canvas{opacity:1}
+  .qrWait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;transition:opacity .25s}
+  .qrCard.ready .qrWait{opacity:0}
+  .qrWait i{width:13px;height:13px;border-radius:50%;background:var(--mag);animation:bob 1.2s ease-in-out infinite}
+  .qrWait i:nth-child(2){background:var(--cyan);animation-delay:.15s} .qrWait i:nth-child(3){background:var(--yel);animation-delay:.3s}
+  .qrCard.nolink .qrBox{display:none}
   .qrT{font-size:clamp(18px,2.4vh,22px);font-weight:600;letter-spacing:-0.02em}
   .qrS{font-size:15px;color:var(--muted);line-height:1.35;text-align:center}
   @media (orientation:portrait){ #printing.hasqr{flex-direction:column;gap:22px} #printing.hasqr .chuteWin{height:min(40vh,600px)} }
@@ -236,6 +245,7 @@
       <div class="viewer" id="viewer">
         <video id="video" playsinline autoplay muted></video>
         <div class="vign"></div>
+        <div class="tint" id="tint"></div>
         <div id="count"></div>
       </div>
     </div>
@@ -276,7 +286,7 @@
   </div>
   <div class="qrCard" id="qrCard">
     <div class="qrT">scan for your digital copy</div>
-    <canvas id="qrCanvas" width="400" height="400"></canvas>
+    <div class="qrBox"><canvas id="qrCanvas" width="400" height="400"></canvas><div class="qrWait" aria-hidden="true"><i></i><i></i><i></i></div></div>
     <div class="qrS" id="qrStatus"></div>
   </div>
 </section>
@@ -434,30 +444,14 @@
       s.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq || 2000; f.Q.value = .8; g.gain.value = vol || .4;
       s.connect(f); f.connect(g); g.connect(a.destination); s.start(t);
     }
-    // real shutter recording, decoded once and played instantly
-    let shutterBuf = null, loading = false;
-    function loadShutter(){
-      const a = A(); if (!a || shutterBuf || loading) return; loading = true;
-      fetch('shutter.mp3').then(r => r.arrayBuffer())
-        .then(b => new Promise((res, rej) => a.decodeAudioData(b, res, rej)))
-        .then(buf => { shutterBuf = buf; }).catch(e => { console.warn('shutter sound', e); loading = false; });
-    }
-    function playBuf(buf, vol){
-      const a = A(); if (!a) return;
-      const s = a.createBufferSource(), g = a.createGain(); s.buffer = buf; g.gain.value = vol;
-      s.connect(g); g.connect(a.destination); s.start();
-    }
     return {
-      unlock(){ A(); loadShutter(); },
+      unlock(){ A(); },
       tap(){ tone(700, .07, 'sine', .10); },
       select(){ tone(880, .09, 'triangle', .13); tone(1320, .09, 'sine', .07, .05); },
       deselect(){ tone(600, .1, 'triangle', .11, 0, 400); },
       nope(){ tone(200, .13, 'square', .05); },
       tick(last){ tone(last ? 1320 : 990, .13, 'sine', .16); },
-      shutter(){
-        if (shutterBuf) playBuf(shutterBuf, .9);
-        else { noise(.035, .55, 0, 3000); noise(.07, .4, .06, 1500); tone(140, .05, 'square', .04, .06); loadShutter(); }
-      },
+      shutter(){ noise(.035, .55, 0, 3000); noise(.07, .4, .06, 1500); tone(140, .05, 'square', .04, .06); },
       chime(){ [523, 659, 784, 1047].forEach((f, i) => tone(f, .32, 'sine', .11, i * .09)); }
     };
   })();
@@ -988,13 +982,25 @@
     video.classList.toggle('mirror', cfg.mirror && cfg.camera === 'user');
     video.classList.remove('look-bw','look-sepia','look-color','look-rio','look-show'); video.classList.add('look-' + look);
     $('viewer').classList.toggle('vintage', look !== 'color');
-    session = { look, frame, need, total, shots: [], thumbs: [], picked: [], running: false, id: newId() };
+    $('viewer').classList.toggle('showtint', look === 'show'); setTint(0);
+    session = { look, frame, need, total, shots: [], thumbs: [], picked: [], running: false, id: newId() }; thumbCache.clear();
     const slots = $('slots'); slots.innerHTML = '';
     for (let i=0;i<total;i++){ const d = document.createElement('div'); d.textContent = i+1; slots.appendChild(d); }
     $('capTitle').textContent = `${total} poses — you'll pick your best ${need}`;
     $('count').textContent = '';
     $('startBtn').style.visibility = ''; $('backBtn').style.visibility = '';
     show('capture');
+  }
+
+  const TINT_CSS = ['rgb(236,96,168)', 'rgb(0,174,239)', 'rgb(246,222,84)'];
+  function setTint(i){ const t = $('tint'); if (t) t.style.backgroundColor = TINT_CSS[i % 3]; }
+  // senior show thumbnails: halftone in a given colour, small for the grid
+  const thumbCache = new Map();
+  function showThumb(i, ci){
+    const key = i + '-' + ci; if (thumbCache.has(key)) return thumbCache.get(key);
+    const src = showTint(session.shots[i], ci), c = document.createElement('canvas'); c.width = src.width/2; c.height = src.height/2;
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    const url = c.toDataURL('image/jpeg', 0.8); thumbCache.set(key, url); return url;
   }
 
   async function runShots(){
@@ -1004,7 +1010,7 @@
     const slots = $('slots').children, count = $('count'), T = session.total;
     for (let i=0;i<T;i++){
       $('capTitle').textContent = `pose ${i+1} of ${T}`;
-      slots[i].classList.add('now');
+      slots[i].classList.add('now'); setTint(i);
       for (let n=cfg.countdown, k=0; n>0; n--, k++){
         count.textContent = n; count.style.color = DOTS[k % 2]; SFX.tick(n === 1);
         count.classList.remove('pop'); void count.offsetWidth; count.classList.add('pop');
@@ -1016,12 +1022,12 @@
       await sleep(30);
       const shot = processFrame(raw, session.look);
       session.shots.push(shot);
-      const th = shot.toDataURL('image/jpeg', 0.7); session.thumbs.push(th);
+      const th = session.look === 'show' ? showThumb(i, i % 3) : shot.toDataURL('image/jpeg', 0.7); session.thumbs.push(th);
       slots[i].classList.remove('now'); slots[i].classList.add('done');
       slots[i].style.backgroundImage = `url(${th})`;
       if (i < T-1) await sleep(Math.max(300, cfg.between*1000));
     }
-    $('capTitle').textContent = 'developing…';
+    $('capTitle').textContent = 'developing…'; setTint(0);
     await loadLogo(); await ensureFonts();
     totalSessions++; store.set('booth.sessions', String(totalSessions));
     busy = false;
@@ -1034,6 +1040,7 @@
     const s = session, grid = $('pickGrid');
     last = null;
     $('pickTitle').textContent = `pick your ${s.need} favorites`;
+    $('pickNote').textContent = s.look === 'show' ? '1st pick prints magenta, 2nd cyan, 3rd yellow' : 'tap them in the order you want them, top to bottom';
     grid.style.gridTemplateColumns = `repeat(${s.total <= 6 ? 3 : s.total <= 8 ? 4 : 6}, 1fr)`;
     grid.innerHTML = '';
     s.thumbs.forEach((src, i) => {
@@ -1059,6 +1066,10 @@
       const pos = order.indexOf(i);
       b.classList.toggle('on', pos >= 0); b.classList.toggle('dim', full && pos < 0); b.classList.toggle('yel', pos % 3 === 2);
       if (pos >= 0) { b.style.setProperty('--c', PICK_COLORS[pos % 3]); b.querySelector('.badge').textContent = pos + 1; }
+      if (s.look === 'show') {   // each photo shows the colour it will print in once picked
+        const img = b.querySelector('img'), want = showThumb(i, pos >= 0 ? pos % 3 : i % 3);
+        if (img.getAttribute('src') !== want) img.src = want;
+      }
     });
     const shots = order.map((i, pos) => s.look === 'show' ? showTint(s.shots[i], pos) : s.shots[i]);
     const pc = $('pickPreview'), px = pc.getContext('2d'); px.clearRect(0, 0, STRIP_W, SHEET_H);
@@ -1325,9 +1336,9 @@
     const card = $('printing');
     if (!digitalOn() || !id) { card.classList.remove('hasqr'); return; }
     card.classList.add('hasqr');
-    const c = $('qrCanvas'), x = c.getContext('2d'); x.clearRect(0,0,c.width,c.height);
-    drawQR(x, copyURL(id), 0, 0, c.width);
-    $('qrStatus').textContent = 'getting it ready…';
+    const q = $('qrCard'); q.classList.remove('ready', 'nolink');
+    const c = $('qrCanvas'); c.getContext('2d').clearRect(0,0,c.width,c.height);
+    $('qrStatus').textContent = 'making your digital copy…';
   }
   async function sendCopy(id, stripURL){
     if (!digitalOn() || !id) return;
@@ -1335,14 +1346,16 @@
     const st = $('qrStatus');
     try {
       const j = await uploadStrip(id, blob);
-      if (j.secure_url && !j.secure_url.includes(id)) {   // account puts uploads elsewhere: show the real link
-        const c = $('qrCanvas'); drawQR(c.getContext('2d'), j.secure_url, 0, 0, c.width);
-      }
-      st.innerHTML = 'ready ✓<br>open the link, then tap &amp; hold the photo to save it';
+      // only now is the link live: draw the code and reveal it
+      const url = (j.secure_url && !j.secure_url.includes(id)) ? j.secure_url : copyURL(id);
+      const c = $('qrCanvas'); drawQR(c.getContext('2d'), url, 0, 0, c.width);
+      $('qrCard').classList.add('ready');
+      st.innerHTML = 'ready ✓ scan it, then tap &amp; hold<br>the photo to save it';
     } catch (e) {
       console.warn('upload', e);
-      if (e.permanent) { st.textContent = 'digital copy unavailable — ask a booth helper'; toast('Upload error: ' + e.message, 8000); }
-      else { await queueAdd(id, blob); st.innerHTML = 'saved ✓ — your link starts working<br>as soon as the booth is back online'; }
+      $('qrCard').classList.add('nolink');
+      if (e.permanent) { st.textContent = 'digital copy unavailable right now — ask a booth helper'; toast('Upload error: ' + e.message, 8000); }
+      else { await queueAdd(id, blob); st.innerHTML = 'the booth is offline right now —<br>your strip is saved and will upload later'; }
     }
   }
   function drawStripQR(ctx, x0, id){
