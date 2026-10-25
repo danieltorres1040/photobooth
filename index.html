@@ -93,7 +93,7 @@
   #video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   #video.mirror{transform:scaleX(-1)}
   #video.look-bw{filter:grayscale(1) sepia(.2) contrast(1.35) brightness(.98)}
-  #video.look-sepia{filter:grayscale(1) sepia(.4) contrast(1.3) brightness(1.02)}
+  #video.look-sepia{filter:grayscale(1) sepia(.55) contrast(1.3) brightness(1.02)}
   #video.look-color{filter:saturate(1.06) contrast(1.04)}
   .vign{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(20,14,10,.38) 100%);display:none}
   #count{position:absolute;inset:0;display:grid;place-items:center;font-size:min(26vw,240px);color:#fff;font-weight:600;letter-spacing:-0.05em;
@@ -593,6 +593,28 @@
     ctx.save(); ctx.imageSmoothingQuality = 'high'; ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = a;
     ctx.drawImage(t, 0, 0, w, h); ctx.restore();
   }
+  // dreamy bloom: only the bright areas (skin highlights, lights) spill a soft glow; shadows stay clean
+  function bloom(ctx, w, h, a, th){
+    const s = document.createElement('canvas'); s.width = Math.round(w*0.12); s.height = Math.round(h*0.12);
+    const sx = s.getContext('2d'); sx.imageSmoothingQuality = 'high'; sx.drawImage(ctx.canvas, 0, 0, s.width, s.height);
+    const im = sx.getImageData(0, 0, s.width, s.height), d = im.data;
+    for (let i=0;i<d.length;i+=4){
+      const l = (0.3*d[i] + 0.59*d[i+1] + 0.11*d[i+2]) / 255;
+      let k = (l - th) / (1 - th); k = k < 0 ? 0 : k*k;
+      d[i] *= k; d[i+1] *= k; d[i+2] *= k;
+    }
+    sx.putImageData(im, 0, 0);
+    const t = document.createElement('canvas'); t.width = Math.max(1, Math.round(w*0.035)); t.height = Math.max(1, Math.round(h*0.035));
+    const tx = t.getContext('2d'); tx.imageSmoothingQuality = 'high'; tx.drawImage(s, 0, 0, t.width, t.height);
+    ctx.save(); ctx.imageSmoothingQuality = 'high'; ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = a; ctx.drawImage(s, 0, 0, w, h);
+    ctx.globalAlpha = a * 0.8; ctx.drawImage(t, 0, 0, w, h);
+    ctx.restore();
+  }
+  // gently lift the deepest blacks, like an old print
+  function lift(ctx, w, h, rgb){
+    ctx.save(); ctx.globalCompositeOperation = 'lighten'; ctx.fillStyle = `rgb(${rgb})`; ctx.fillRect(0, 0, w, h); ctx.restore();
+  }
   function vignette(ctx, w, h, rgba){
     const g = ctx.createRadialGradient(w/2,h/2,Math.min(w,h)*0.42,w/2,h/2,Math.hypot(w,h)/2);
     g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1, rgba);
@@ -616,6 +638,15 @@
     }
     ctx.putImageData(im, 0, 0);
   }
+  // richer (or paler) tone: push each colour away from its own grey
+  const satCache = {};
+  function satLUT(L, k){
+    if (k === 1) return L;
+    if (satCache[k]) return satCache[k];
+    const r = new Uint8ClampedArray(256), g = new Uint8ClampedArray(256), b = new Uint8ClampedArray(256);
+    for (let i=0;i<256;i++){ const y = 0.3*L.r[i] + 0.59*L.g[i] + 0.11*L.b[i]; r[i] = y + (L.r[i]-y)*k; g[i] = y + (L.g[i]-y)*k; b[i] = y + (L.b[i]-y)*k; }
+    return (satCache[k] = { r, g, b });
+  }
   function mapLUT(ctx, w, h, L){
     const img = ctx.getImageData(0,0,w,h), d = img.data;
     for (let i=0;i<d.length;i+=4){
@@ -636,22 +667,25 @@
         d[i+2] = clamp((d[i+2]-128)*1.06+128-4);
       }
       ctx.putImageData(img,0,0);
+      bloom(ctx, w, h, 0.3, 0.6);                  // soft glow on highlights
       return;
     }
     if (look === 'bw') {
-      // nostalgic warm black & white: soft skin, toned paper, grain
+      // nostalgic warm black & white: soft skin, toned paper, grain, glowing highlights
       smoothSkin(ctx, w, h, 0.72);
       soften(ctx, w, h, 0.85);
       mapLUT(ctx, w, h, BW_LUT);
       glow(ctx, w, h, 0.06);
+      bloom(ctx, w, h, 0.34, 0.55);
       filmTexture(ctx, w, h, 0.65);
       return;
     }
-    // vintage: editorial photo-booth look — espresso blacks, taupe mid-tones, luminous cream highlights, strong contrast
+    // vintage: editorial photo-booth look — espresso blacks, taupe mid-tones (a touch richer), luminous cream highlights
     smoothSkin(ctx, w, h, 0.75);
     soften(ctx, w, h, 0.85);
-    mapLUT(ctx, w, h, SEPIA_LUT);
+    mapLUT(ctx, w, h, satLUT(SEPIA_LUT, 1.4));
     glow(ctx, w, h, 0.12);
+    bloom(ctx, w, h, 0.34, 0.55);
     filmTexture(ctx, w, h, 0.35);
   }
   function clamp(v){ return v<0?0:v>255?255:v; }
