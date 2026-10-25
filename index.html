@@ -67,17 +67,19 @@
   .frameOpt.sel canvas{border-color:var(--ink);box-shadow:7px 7px 0 var(--c)}
   .frameOpt.sel span{color:var(--ink);font-weight:600}
   .frameOpt:active canvas{transform:translate(3px,3px)}
-  .looks{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-bottom:clamp(18px,3vh,30px)}
+  .looks{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:820px;margin-bottom:clamp(16px,2.6vh,28px)}
   .look{display:flex;align-items:center;gap:12px;background:var(--card);border:2px solid var(--line);border-radius:999px;
-    padding:8px 22px 8px 8px;cursor:pointer;transition:transform .12s, box-shadow .12s;font:inherit;color:var(--ink)}
+    padding:6px 18px 6px 6px;cursor:pointer;transition:transform .12s, box-shadow .12s;font:inherit;color:var(--ink)}
   .look{--c:var(--cyan)}
   .look.sel{border-color:var(--ink);box-shadow:5px 5px 0 var(--c)}
   .look:active{transform:translate(3px,3px)}
-  .look .sw{width:44px;height:44px;border-radius:50%;flex:none}
-  .look span{font-size:clamp(16px,2vh,19px);font-weight:500;letter-spacing:-0.01em}
+  .look .sw{width:38px;height:38px;border-radius:50%;flex:none}
+  .look span{font-size:clamp(15px,1.9vh,18px);font-weight:500;letter-spacing:-0.01em}
   .sw.color{background:linear-gradient(135deg,#f3b8a5,#f6d58e 50%,#9cc9c0)}
   .sw.bw{background:linear-gradient(135deg,#17120f,#7d766c 55%,#ede5d3)}
   .sw.sepia{background:linear-gradient(135deg,#4a3420,#a8825a 55%,#efdcbc)}
+  .sw.rio{background:linear-gradient(135deg,#7fb7c2,#f4b3a8 50%,#ffe2b8)}
+  .sw.show{background:conic-gradient(from 200deg,var(--mag) 0 33.3%,var(--cyan) 0 66.6%,var(--yel) 0)}
   .btn:disabled{opacity:.35;box-shadow:none;cursor:default}
 
   /* capture */
@@ -95,6 +97,8 @@
   #video.look-bw{filter:grayscale(1) sepia(.2) contrast(1.35) brightness(.98)}
   #video.look-sepia{filter:grayscale(1) sepia(.55) contrast(1.3) brightness(1.02)}
   #video.look-color{filter:saturate(1.06) contrast(1.04)}
+  #video.look-rio{filter:brightness(1.1) contrast(.92) saturate(1.2) sepia(.22) hue-rotate(-14deg)}
+  #video.look-show{filter:grayscale(1) contrast(1.15)}
   .vign{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(20,14,10,.38) 100%);display:none}
   #count{position:absolute;inset:0;display:grid;place-items:center;font-size:min(26vw,240px);color:#fff;font-weight:600;letter-spacing:-0.05em;
     text-shadow:0 4px 28px rgba(0,0,0,.45);pointer-events:none;line-height:1}
@@ -212,11 +216,13 @@
   </div>
   <div class="stepLabel one"><b>1</b> pick a frame</div>
   <div class="frames" id="frameList"></div>
-  <div class="stepLabel two"><b>2</b> pick a style</div>
+  <div class="stepLabel two"><b>2</b> pick a filter</div>
   <div class="looks">
     <button class="look" data-look="bw"><i class="sw bw"></i><span>classic b&amp;w</span></button>
     <button class="look" data-look="sepia"><i class="sw sepia"></i><span>vintage</span></button>
     <button class="look" data-look="color"><i class="sw color"></i><span>full color</span></button>
+    <button class="look" data-look="rio"><i class="sw rio"></i><span>rio de janeiro</span></button>
+    <button class="look" data-look="show"><i class="sw show"></i><span>senior show</span></button>
   </div>
   <button class="btn" id="nextBtn">next →</button>
   </div>
@@ -657,6 +663,29 @@
   }
 
   function applyLook(ctx, w, h, look){
+    if (look === 'rio') {
+      // bright, airy and warm: lifted & softened, peach-pink highlights, a hint of teal in the shadows
+      smoothSkin(ctx, w, h, 0.7);
+      const img = ctx.getImageData(0,0,w,h), d = img.data;
+      for (let i=0;i<d.length;i+=4){
+        let r = (d[i]-128)*0.88+128+22, g = (d[i+1]-128)*0.88+128+12, b = (d[i+2]-128)*0.88+128+14;
+        const l = (0.3*r + 0.59*g + 0.11*b) / 255, t = l < 0 ? 0 : l > 1 ? 1 : l, sh = (1-t)*(1-t), hi = t*t;
+        r += -18*sh + 30*hi; g += 6*sh - 4*hi; b += 24*sh - 2*hi;            // teal shadows → peach-pink highlights
+        const y = 0.3*r + 0.59*g + 0.11*b; r = y + (r-y)*1.15; g = y + (g-y)*1.15; b = y + (b-y)*1.15;   // a little more colour
+        d[i] = clamp(r); d[i+1] = clamp(g); d[i+2] = clamp(b);
+      }
+      ctx.putImageData(img,0,0);
+      bloom(ctx, w, h, 0.34, 0.58);
+      return;
+    }
+    if (look === 'show') {
+      // neutral glowing mono base; each photo is tinted magenta / cyan / yellow when it's placed on the strip
+      smoothSkin(ctx, w, h, 0.72);
+      soften(ctx, w, h, 0.85);
+      mapLUT(ctx, w, h, BW_LUT);
+      bloom(ctx, w, h, 0.3, 0.55);
+      return;
+    }
     if (look === 'color') {
       smoothSkin(ctx, w, h, 0.7);
       // gentle warmth + contrast
@@ -689,6 +718,26 @@
     filmTexture(ctx, w, h, 0.35);
   }
   function clamp(v){ return v<0?0:v>255?255:v; }
+
+  // senior show filter: two-tone print in one of the show colours (dark ink → colour → paper)
+  const SHOW_COLORS = [[236,0,140], [0,174,239], [253,255,57]];
+  const tintCache = new Map();
+  function showTint(src, pos){
+    const key = src; let m = tintCache.get(key); if (!m) { m = {}; tintCache.set(key, m); }
+    const ci = pos % 3; if (m[ci]) return m[ci];
+    const C = SHOW_COLORS[ci], D = [C[0]*0.22 + 18, C[1]*0.22 + 14, C[2]*0.22 + 16], P = [255, 251, 242];
+    const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+    const x = c.getContext('2d'); x.drawImage(src, 0, 0);
+    const im = x.getImageData(0, 0, c.width, c.height), d = im.data;
+    for (let i=0;i<d.length;i+=4){
+      const l = (0.3*d[i] + 0.59*d[i+1] + 0.11*d[i+2]) / 255;
+      let A, B, t; if (l < 0.55) { A = D; B = C; t = l/0.55; } else { A = C; B = P; t = (l-0.55)/0.45; }
+      d[i] = A[0] + (B[0]-A[0])*t; d[i+1] = A[1] + (B[1]-A[1])*t; d[i+2] = A[2] + (B[2]-A[2])*t;
+    }
+    x.putImageData(im, 0, 0);
+    filmTexture(x, c.width, c.height, 0.4);
+    return (m[ci] = c);
+  }
 
   // ---------- strip composition ----------
   // Sheet = 4x6in @300dpi (1200x1800) holding two identical 2x6 strips. Cut down the middle.
@@ -899,7 +948,7 @@
     const frame = FRAMES[frameSel] || CLASSIC, need = frameN(frame);
     const total = Math.max(need, Math.min(12, cfg.shots | 0 || 5));
     video.classList.toggle('mirror', cfg.mirror && cfg.camera === 'user');
-    video.classList.remove('look-bw','look-sepia','look-color'); video.classList.add('look-' + look);
+    video.classList.remove('look-bw','look-sepia','look-color','look-rio','look-show'); video.classList.add('look-' + look);
     $('viewer').classList.toggle('vintage', look !== 'color');
     session = { look, frame, need, total, shots: [], thumbs: [], picked: [], running: false, id: newId() };
     const slots = $('slots'); slots.innerHTML = '';
@@ -973,7 +1022,7 @@
       b.classList.toggle('on', pos >= 0); b.classList.toggle('dim', full && pos < 0); b.classList.toggle('yel', pos % 3 === 2);
       if (pos >= 0) { b.style.setProperty('--c', PICK_COLORS[pos % 3]); b.querySelector('.badge').textContent = pos + 1; }
     });
-    const shots = order.map(i => s.shots[i]);
+    const shots = order.map((i, pos) => s.look === 'show' ? showTint(s.shots[i], pos) : s.shots[i]);
     const pc = $('pickPreview'), px = pc.getContext('2d'); px.clearRect(0, 0, STRIP_W, SHEET_H);
     drawFramed(px, 0, shots, s.frame); drawStripQR(px, 0, s.id);
     $('printBtn').disabled = !full;
