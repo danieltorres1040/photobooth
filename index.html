@@ -16,6 +16,7 @@
 <style>
   @font-face{font-family:Inter;font-weight:400;font-style:normal;font-display:block;src:url(fonts/Inter-Regular.woff) format('woff')}
   @font-face{font-family:Inter;font-weight:500;font-style:normal;font-display:block;src:url(fonts/Inter-Medium.woff) format('woff')}
+  @font-face{font-family:Inter;font-weight:600;font-style:italic;font-display:block;src:url(fonts/Inter-SemiBoldItalic.woff) format('woff')}
   @font-face{font-family:Inter;font-weight:600;font-style:normal;font-display:block;src:url(fonts/Inter-SemiBold.woff) format('woff')}
   :root{
     --cream:#faf6ef; --ink:#2b2420; --muted:#8a7d72; --card:#fffdf8; --line:#e6ddd0;
@@ -42,20 +43,20 @@
   h1{font-weight:600;font-size:clamp(44px,8vw,92px);margin:0 0 10px;letter-spacing:-0.045em;line-height:1}
   .homeLogo{height:clamp(52px,8vw,88px);width:auto;max-width:70vw;margin-bottom:30px;display:block}
   .sub{color:var(--muted);font-size:clamp(17px,2.3vw,24px);margin:0 0 44px;font-weight:400;letter-spacing:-0.01em}
-  .btn{font-family:inherit;font-weight:500;letter-spacing:-0.01em;font-size:clamp(19px,2.6vw,26px);padding:20px 46px;border-radius:999px;
-    border:2px solid var(--mag);background:var(--mag);color:#fff;cursor:pointer;min-width:200px;box-shadow:0 8px 24px rgba(236,0,140,.25)}
+  .btn{font-family:inherit;font-weight:500;letter-spacing:-0.01em;font-size:clamp(15px,2.08vw,21px);padding:16px 37px;border-radius:999px;
+    border:2px solid var(--mag);background:var(--mag);color:#fff;cursor:pointer;min-width:160px;box-shadow:0 8px 24px rgba(236,0,140,.25)}
   .btn.ghost{background:transparent;color:var(--ink);border-color:var(--ink);box-shadow:none}
   .btn:active{transform:scale(.97)}
   .row{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
 
   /* attract */
   #attract{gap:0}
-  .homeHead{display:flex;flex-direction:column;align-items:center;margin-bottom:clamp(14px,2.4vh,26px)}
+  .homeHead{display:flex;flex-direction:column;align-items:center;margin-bottom:clamp(30px,5vh,56px)}
   .homeLogo{height:clamp(64px,10.5vh,120px);width:auto;max-width:80vw;margin-bottom:14px;display:block}
   h1{font-size:clamp(18px,3vh,32px);font-weight:400;letter-spacing:.22em;margin:0 0 0 .22em}
   .sub{margin:8px 0 0;font-size:clamp(15px,2vh,20px)}
   .sub:empty{display:none}
-  .stepLabel{display:flex;align-items:center;gap:14px;font-size:clamp(22px,3.2vh,30px);font-weight:600;letter-spacing:-0.02em;margin:0 0 14px}
+  .stepLabel{display:flex;align-items:center;gap:14px;font-size:clamp(22px,3.2vh,30px);font-weight:600;font-style:italic;text-transform:uppercase;letter-spacing:.01em;margin:0 0 14px}
   .stepLabel b{width:clamp(36px,5vh,46px);height:clamp(36px,5vh,46px);border-radius:50%;display:grid;place-items:center;font-size:clamp(18px,2.6vh,24px);color:#fff;background:var(--ink)}
   .stepLabel.one b{background:var(--mag)} .stepLabel.two b{background:var(--cyan)}
   .frames{display:flex;gap:clamp(14px,2vw,26px);justify-content:center;flex-wrap:nowrap;max-width:100%;overflow-x:auto;padding:4px 12px 14px;margin-bottom:clamp(14px,2.2vh,24px);scrollbar-width:none}
@@ -107,14 +108,14 @@
   #count.pop{animation:pop .9s ease-out}
   @keyframes pop{0%{transform:scale(1.25);opacity:0}15%{opacity:1}100%{transform:scale(.92);opacity:.9}}
   .capSide{width:330px;flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px}
-  #capTitle{font-weight:600;letter-spacing:-0.035em;font-size:clamp(24px,2.6vw,30px);margin:0;line-height:1.1}
+  #capTitle{font-weight:600;font-style:italic;text-transform:uppercase;letter-spacing:.01em;font-size:clamp(24px,2.6vw,30px);margin:0;line-height:1.1}
   #slots{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
   #slots div{aspect-ratio:4/3;border:2px dashed #d6cbbb;border-radius:9px;display:grid;place-items:center;font-size:16px;font-weight:500;
     color:var(--muted);background:center/cover no-repeat;transition:border-color .2s}
   #slots div:nth-child(odd){--c:var(--mag)} #slots div:nth-child(even){--c:var(--cyan)}
   #slots div.now{border:3px solid var(--c);color:var(--ink)}
   #slots div.done{border:3px solid var(--c);color:transparent}
-  .link{font:inherit;font-size:16px;color:var(--muted);background:none;border:0;padding:8px 12px;cursor:pointer}
+  .link{font:inherit;font-size:16px;color:var(--muted);background:none;border:0;padding:10px 14px;cursor:pointer}
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30}
   #flash.go{animation:flash .45s ease-out}
   @keyframes flash{0%{opacity:1}100%{opacity:0}}
@@ -129,7 +130,7 @@
   .stripWrap{height:min(80vh,1200px);aspect-ratio:1/3;box-shadow:0 18px 50px rgba(43,36,32,.25);border-radius:4px;overflow:hidden;background:#fff;flex:none}
   .stripWrap canvas{width:100%;height:100%;display:block}
   .pickSide{display:flex;flex-direction:column;align-items:center;gap:16px;width:min(600px,56vw)}
-  .pickSide h2{font-weight:600;letter-spacing:-0.035em;font-size:clamp(28px,4vw,44px);margin:0}
+  .pickSide h2{font-weight:600;font-style:italic;text-transform:uppercase;letter-spacing:.01em;font-size:clamp(28px,4vw,44px);margin:0}
   #pickNote{color:var(--muted);font-size:17px;margin:-6px 0 4px}
   #pickGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;width:100%}
   .pk{position:relative;aspect-ratio:4/3;padding:0;border:3px solid transparent;border-radius:12px;overflow:hidden;cursor:pointer;background:#ddd;transition:opacity .15s, transform .1s}
@@ -140,7 +141,7 @@
   .pk .badge{position:absolute;top:6px;left:6px;width:28px;height:28px;border-radius:50%;background:var(--c);color:#fff;font-weight:600;font-size:15px;display:none;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.25)}
   .pk.on .badge{display:grid}
   .pk.on.yel .badge{color:var(--ink)}
-  .pickBtns{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+  .pickBtns{display:flex;flex-direction:column;gap:8px;align-items:center;margin-top:6px}
   #autoNote,.noteLine{color:var(--muted);font-size:17px;min-height:24px;max-width:460px}
   /* step tracker: chunky 3D dots on a dotted track */
   .steps{position:fixed;top:calc(env(safe-area-inset-top) + 8px);left:50%;transform:translateX(-50%);z-index:20;display:flex;align-items:flex-start;
@@ -297,7 +298,7 @@
     <div id="pickGrid"></div>
     <div class="pickBtns">
       <button class="btn" id="pickNext" disabled>next → pick a filter</button>
-      <button class="btn ghost" id="retakeBtn">retake</button>
+      <button class="link" id="retakeBtn">↺ retake</button>
     </div>
     <div id="pickMsg" class="noteLine"></div>
   </div>
@@ -318,7 +319,7 @@
     </div>
     <div class="pickBtns">
       <button class="btn" id="printBtn" disabled>print my strip ♡</button>
-      <button class="btn ghost" id="filtBack">← back</button>
+      <button class="link" id="filtBack">← back</button>
     </div>
     <div id="autoNote"></div>
   </div>
