@@ -80,14 +80,10 @@
   .sw.bw{background:linear-gradient(135deg,#17120f,#7d766c 55%,#ede5d3)}
   .sw.sepia{background:linear-gradient(135deg,#4a3420,#a8825a 55%,#efdcbc)}
   .sw.rio{background:linear-gradient(135deg,#7fb7c2,#f4b3a8 50%,#ffe2b8)}
-  /* senior show icon: inks overprint — magenta → (overlap) → cyan → (overlap) → yellow → loop */
-  .sw.show{position:relative;overflow:hidden;isolation:isolate;background:none}
-  .sw.show::before,.sw.show::after{content:"";position:absolute;inset:0;border-radius:50%}
-  .sw.show::before{background:#EC008C;animation:swBase 9s linear infinite}
-  .sw.show::after{background:#00AEEF;opacity:0;mix-blend-mode:multiply;animation:swOver 9s linear infinite}
-  @keyframes swBase{0.0%{background-color:#EC008C}24.0%{background-color:#EC008C}30.667%{background-color:#FFFFFF}33.3%{background-color:#FFFFFF}33.333%{background-color:#00AEEF}57.333%{background-color:#00AEEF}64.0%{background-color:#FFFFFF}66.633%{background-color:#FFFFFF}66.667%{background-color:#FDFF39}90.667%{background-color:#FDFF39}97.333%{background-color:#FFFFFF}99.967%{background-color:#FFFFFF}100%{background-color:#EC008C}}
-  @keyframes swOver{0.0%{background-color:#00AEEF;opacity:0}8.333%{background-color:#00AEEF;opacity:0}20.0%{background-color:#00AEEF;opacity:1}33.3%{background-color:#00AEEF;opacity:1}33.317%{background-color:#FDFF39;opacity:0}33.333%{background-color:#FDFF39;opacity:0}41.667%{background-color:#FDFF39;opacity:0}53.333%{background-color:#FDFF39;opacity:1}66.633%{background-color:#FDFF39;opacity:1}66.65%{background-color:#EC008C;opacity:0}66.667%{background-color:#EC008C;opacity:0}75.0%{background-color:#EC008C;opacity:0}86.667%{background-color:#EC008C;opacity:1}99.967%{background-color:#EC008C;opacity:1}99.983%{background-color:#00AEEF;opacity:0}100%{background-color:#00AEEF;opacity:0}}
-  @media (prefers-reduced-motion: reduce){ .sw.show::before,.sw.show::after{animation:none} }
+  /* senior show icon: magenta → cyan → yellow, one second each */
+  .sw.show{background:#EC008C;animation:swCycle 3s steps(1,end) infinite}
+  @keyframes swCycle{0%{background:#EC008C}33.333%{background:#00AEEF}66.666%{background:#FDFF39}}
+  @media (prefers-reduced-motion: reduce){ .sw.show{animation:none} }
   .btn:disabled{opacity:.35;box-shadow:none;cursor:default}
 
   /* capture */
