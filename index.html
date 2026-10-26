@@ -297,7 +297,7 @@
   <div class="stripWrap"><canvas id="pickPreview" width="600" height="1800"></canvas></div>
   <div class="pickSide">
     <h2 id="pickTitle">pick your favorites</h2>
-    <p id="pickNote">tap them in the order you want them, top to bottom</p>
+    <p id="pickNote">tap in order — 1st goes on top</p>
     <div id="pickGrid"></div>
     <div class="pickBtns">
       <button class="btn" id="pickNext" disabled>next → pick a filter</button>
@@ -312,7 +312,7 @@
   <div class="stripWrap"><canvas id="filtPreview" width="600" height="1800"></canvas><div class="devWait" id="devWait" aria-hidden="true"><i></i><i></i><i></i></div></div>
   <div class="pickSide">
     <h2>pick a filter</h2>
-    <p id="filtNote">tap one to see it on your strip</p>
+    <p id="filtNote"></p>
     <div class="looks filtLooks">
       <button class="look" data-look="bw"><i class="sw bw"></i><span>classic b&amp;w</span></button>
       <button class="look" data-look="sepia"><i class="sw sepia"></i><span>vintage</span></button>
@@ -335,7 +335,7 @@
   <div class="chuteWin"><img id="dropImg" alt=""></div>
   <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
   <div id="printMsg">developing…</div>
-  <div id="printSub">photos delivered here in one minute</div>
+  <div id="printSub">your strip slides out below in about a minute</div>
   <div class="row" id="printActions"></div>
   </div>
   <div class="qrCard" id="qrCard">
@@ -1081,7 +1081,7 @@
     const s = session, grid = $('pickGrid');
     last = null;
     $('pickTitle').textContent = `pick your ${s.need} favorites`;
-    $('pickNote').textContent = 'tap them in the order you want them, top to bottom';
+    $('pickNote').textContent = 'tap in order — 1st goes on top';
     grid.style.gridTemplateColumns = `repeat(${s.total <= 6 ? 3 : s.total <= 8 ? 4 : 6}, 1fr)`;
     grid.innerHTML = '';
     s.thumbs.forEach((src, i) => {
@@ -1098,7 +1098,7 @@
     const at = s.picked.indexOf(i);
     if (at >= 0) { s.picked.splice(at, 1); SFX.deselect(); }
     else if (s.picked.length < s.need) { s.picked.push(i); SFX.select(); }
-    else { SFX.nope(); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); $('pickMsg').textContent = 'tap a chosen photo to swap it out'; return; }
+    else { SFX.nope(); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); $('pickMsg').textContent = 'tap a chosen photo to swap it'; return; }
     updatePick();
   }
   function updatePick(){
@@ -1111,7 +1111,7 @@
     const pc = $('pickPreview'), px = pc.getContext('2d'); px.clearRect(0, 0, STRIP_W, SHEET_H);
     drawFramed(px, 0, order.map(i => s.raws[i]), s.frame);
     $('pickNext').disabled = !full;
-    $('pickMsg').textContent = full ? 'looking good! next, pick a filter ♡' : `${s.need - order.length} more to go`;
+    $('pickMsg').textContent = '';
   }
 
   // ---------- pick a filter ----------
@@ -1126,6 +1126,13 @@
     return s.fx[key];
   }
   let filtJob = 0;
+  const FILTER_NOTES = {
+    bw: 'warm, soft, timeless',
+    sepia: 'rich sepia, old photo-booth',
+    color: 'bright and glowy',
+    rio: 'washed violet & peach',
+    show: '1st magenta · 2nd cyan · 3rd yellow'
+  };
   async function applyFilter(look){
     const s = session; if (!s) return;
     s.look = lookSel = look; renderLooks();
@@ -1146,8 +1153,8 @@
     last = composeSheet(out, s.frame);   // ready before the tap so the share sheet opens instantly
     $('devWait').classList.remove('on');
     $('printBtn').disabled = false;
-    $('filtNote').textContent = look === 'show' ? '1st photo prints magenta, 2nd cyan, 3rd yellow' : 'tap one to see it on your strip';
-    $('autoNote').textContent = currentMode() === 'airprint' ? 'tap print, then choose “Print” in the menu that pops up ♡' : 'looking good! ♡';
+    $('filtNote').textContent = FILTER_NOTES[look] || '';
+    $('autoNote').textContent = currentMode() === 'airprint' ? 'next: tap Print in the menu that pops up' : '';
     cfg.lastLook = look; saveCfg();
   }
   function openFilter(){
@@ -1173,7 +1180,7 @@
     $('dropImg').src = last.stripURL;
     const d = $('dropImg'); d.classList.remove('drop'); void d.offsetWidth; d.classList.add('drop');
     $('printMsg').textContent = 'developing…';
-    $('printSub').textContent = 'photos delivered here in one minute';
+    $('printSub').textContent = 'your strip slides out below in about a minute';
     $('printActions').innerHTML = '';
     const copyId = session && session.id;
     showQR(copyId);
