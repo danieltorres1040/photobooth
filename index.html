@@ -118,6 +118,12 @@
   #slots div:nth-child(odd){--c:var(--mag)} #slots div:nth-child(even){--c:var(--cyan)}
   #slots div.now{border:3px solid var(--c);color:var(--ink)}
   #slots div.done{border:3px solid var(--c);color:transparent}
+  /* breathing glow on press to start */
+  #startBtn{position:relative;padding:20px 46px;font-size:clamp(17px,2.3vw,23px);animation:breathe 2.2s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(1);box-shadow:0 8px 24px rgba(236,0,140,.25),0 0 0 0 rgba(236,0,140,.0)}
+    50%{transform:scale(1.05);box-shadow:0 10px 34px rgba(236,0,140,.45),0 0 26px 6px rgba(236,0,140,.35)}}
+  @media (prefers-reduced-motion: reduce){ #startBtn{animation:none} }
+  .viewer.tapstart{cursor:pointer}
   .link{font:inherit;font-size:16px;color:var(--muted);background:none;border:0;padding:10px 14px;cursor:pointer}
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30}
   #flash.go{animation:flash .45s ease-out}
@@ -1257,6 +1263,9 @@
   $('pickNext').addEventListener('click', () => { SFX.tap(); openFilter(); });
   $('filtBack').addEventListener('click', () => { SFX.tap(); filtJob++; last = null; show('pick'); });
   $('startBtn').addEventListener('click', () => { SFX.unlock(); SFX.tap(); runShots(); });
+  // tapping the camera preview also starts (before the photos begin)
+  $('viewer').classList.add('tapstart');
+  $('viewer').addEventListener('click', () => { if (current === 'capture' && session && !session.running) { SFX.unlock(); SFX.tap(); runShots(); } });
   $('backBtn').addEventListener('click', goHome);
 
   // keep screen awake
