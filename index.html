@@ -358,7 +358,7 @@
 
       <label>Print method
         <select id="s_printMode">
-          <option value="auto">Automatic (print server if found, otherwise AirPrint)</option>
+          <option value="auto">Automatic (print server if found, otherwise don't print — preview only)</option>
           <option value="server">Print server only (fully automatic)</option>
           <option value="airprint">AirPrint via share sheet (guest taps Print)</option>
           <option value="none">Don't print (preview / download only)</option>
@@ -1166,7 +1166,7 @@
 
   function stopAutoPrint(){}
 
-  function currentMode(){ return cfg.printMode === 'auto' ? (serverFound ? 'server' : 'airprint') : cfg.printMode; }
+  function currentMode(){ return cfg.printMode === 'auto' ? (serverFound ? 'server' : 'none') : cfg.printMode; }
 
   async function doPrint(){
     if (!last) return;
@@ -1190,9 +1190,9 @@
     let ok = true;
     if (mode === 'server') ok = await printViaServer(last.sheetURL);
     else if (mode === 'airprint') { /* already sent */ }
-    else { $('printSub').textContent = 'printing is turned off — strip saved for download in settings'; }
+    else { $('printMsg').textContent = 'all done!'; $('printSub').textContent = digitalOn() ? 'scan the code to save your strip' : ''; }
 
-    if (ok && cfg.printMode !== 'none') {
+    if (ok && mode !== 'none') {
       sheetsPrinted += cfg.copies; store.set('booth.sheets', String(sheetsPrinted));
       const left18 = 18 - (sheetsPrinted % 18);
       if (left18 <= 2) toast(`Heads up: about ${left18} sheet(s) left in the paper cassette`, 6000);
@@ -1282,7 +1282,7 @@
       `Sessions on this iPad: <b>${totalSessions}</b> &nbsp;·&nbsp; Sheets printed: <b>${sheetsPrinted}</b><br>` +
       `Paper cassette holds 18 sheets → about <b>${18 - (sheetsPrinted % 18)}</b> left in the current load. ` +
       `Ink cassettes in a 108 pack cover 36 prints each.<br>` +
-      `Print server: ${serverFound ? 'found ✓ (silent printing)' : 'not found — using AirPrint (share sheet)'} &nbsp;·&nbsp; ` +
+      `Print server: ${serverFound ? 'found ✓ (silent printing)' : (cfg.printMode === 'auto' ? 'not found — preview only, not printing' : 'not found')} &nbsp;·&nbsp; ` +
       `Offline ready: ${navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes ✓' : 'not yet — reload once while online'}<br>` +
       `Digital copies: ${digitalOn() ? 'on' : 'off'} &nbsp;·&nbsp; waiting to upload: <b id="qCount">…</b><br>` +
       `Page is ${window.isSecureContext ? 'secure ✓ (camera allowed)' : '<b>not secure ✗ — camera will not work</b>'}`;
