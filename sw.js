@@ -1,13 +1,13 @@
 // Keeps the booth working offline (e.g. while the iPad is joined to the Selphy's own Wi-Fi).
 // Network-first so updates arrive when online; falls back to the cached copy when offline.
-const CACHE = 'booth-v55';  // bump this number whenever you change the files
+const CACHE = 'booth-v57';  // bump this number whenever you change the files
 const SHELL = ['./', './index.html', './manifest.json', './icon.png', './logo.png', './frames.json', './qr.js', './sign-text.png', './bg.mp4', './bg-poster.jpg',
   './fonts/Inter-Regular.woff', './fonts/Inter-Medium.woff', './fonts/Inter-SemiBold.woff', './fonts/Inter-Bold.woff'];
 
 self.addEventListener('install', e => {
   // also cache every frame listed in frames.json, so new frames work offline without editing this file
   e.waitUntil(caches.open(CACHE).then(async c => {
-    await c.addAll(SHELL);
+    await c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })));
     try {
       const list = await (await fetch('./frames.json', { cache: 'no-cache' })).json();
       await c.addAll((list.frames || []).filter(f => f.file).map(f => './' + f.file));
@@ -29,7 +29,8 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin || /\/(print|status)$/.test(url.pathname)) return;
   e.respondWith(
-    Promise.race([fetch(e.request), timeout(3000)])
+    // always ask the server for the newest copy (skips the browser's own 10-minute cache), fall back to the saved copy offline
+    Promise.race([e.request.headers.has('range') ? fetch(e.request) : fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }), timeout(5000)])
       .then(res => {
         if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
         return res;

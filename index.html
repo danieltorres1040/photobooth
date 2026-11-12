@@ -87,21 +87,20 @@
   @keyframes halo{0%,100%{opacity:.25}50%{opacity:1}}
   .base{position:absolute;left:0;right:0;height:230px;top:calc(773px + (var(--H) - 1003px) * .5)}
   .sign{position:absolute;left:161px;top:0;width:278px;height:230px;background:#000}
-  .sign img{position:absolute;left:29px;top:26px;width:220px;height:auto}
+  .sign > img{position:absolute;left:29px;top:26px;width:220px;height:auto}
   .slot{position:absolute;left:19px;right:19px;top:139px;height:73px;background:#fff}
-  /* the strip feeds down out of the white slot … */
-  .stripClip{position:absolute;left:93px;width:92px;top:176px;height:700px;overflow:hidden;z-index:3;pointer-events:none}
-  #stripOut{display:block;width:92px;height:276px;transform:translateY(-100%);box-shadow:0 4px 10px rgba(0,0,0,.2)}
+  /* a small strip drops out of the white slot and lands inside the sign box (never past its bottom edge) … */
+  .stripClip{position:absolute;left:0;right:0;top:139px;bottom:0;overflow:hidden;z-index:3;pointer-events:none}
+  #stripOut{display:block;width:29px;height:87px;margin:2px auto 0;transform:translateY(-102%);box-shadow:0 2px 6px rgba(0,0,0,.3)}
   #stripOut:not(.go){visibility:hidden}
-  #stripOut.go{animation:feed 2.2s linear forwards}
-  @keyframes feed{0%{transform:translateY(-100%)}18%{transform:translateY(-90%)}26%{transform:translateY(-88%)}46%{transform:translateY(-76%)}54%{transform:translateY(-74%)}
-    74%{transform:translateY(-62%);animation-timing-function:cubic-bezier(.2,.6,.3,1)}100%{transform:translateY(-55%)}}
+  #stripOut.go{animation:feed .75s cubic-bezier(.5,0,.75,0) forwards}
+  @keyframes feed{0%{transform:translateY(-102%)}78%{transform:translateY(0)}88%{transform:translateY(-5%);animation-timing-function:cubic-bezier(.3,0,.6,1)}100%{transform:translateY(0)}}
   /* … then it's "picked up": it floats to the middle and fills the screen, with the booth thrown out of focus behind it */
   #held{position:absolute;display:none;z-index:6;transform-origin:50% 50%;box-shadow:0 30px 70px rgba(0,0,0,.35), 0 8px 20px rgba(0,0,0,.2);
-    transition:transform 1.25s cubic-bezier(.3,.7,.2,1), clip-path 1.25s cubic-bezier(.3,.7,.2,1), -webkit-clip-path 1.25s cubic-bezier(.3,.7,.2,1);will-change:transform}
+    transition:transform .8s cubic-bezier(.25,.8,.25,1);will-change:transform}
   #held.on{display:block}
-  .dofVeil{position:absolute;inset:0;background:rgba(255,255,255,.28);opacity:0;transition:opacity 1.2s ease;pointer-events:none;z-index:5}
-  #p-booth .booth,#p-booth .awning{transition:filter 1.2s ease, transform 1.2s ease}
+  .dofVeil{position:absolute;inset:0;background:rgba(255,255,255,.28);opacity:0;transition:opacity .8s ease;pointer-events:none;z-index:5}
+  #p-booth .booth,#p-booth .awning{transition:filter .8s ease, transform .8s ease}
   #p-booth.dof .booth,#p-booth.dof .awning{filter:blur(10px);transform:scale(1.03)}
   #p-booth.dof .dofVeil{opacity:1}
   .coinSlot{position:absolute;left:572px;top:40px;width:54px;height:150px;background:#000}
@@ -418,6 +417,7 @@
 <script>
 (() => {
   'use strict';
+  const BOOTH_VERSION = 'v57';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
@@ -1299,10 +1299,10 @@
     const coin = $('coin'); coin.getBoundingClientRect(); coin.classList.add('drop');
     await sleep(1000); SFX.clink(); $('coinSlot').classList.add('lit');
     await sleep(500); $('coinSlot').classList.remove('lit');
-    SFX.whir(2.2); const so = $('stripOut'); void so.offsetWidth; so.classList.add('go');
-    await sleep(2500);
+    SFX.whir(.8); const so = $('stripOut'); void so.offsetWidth; so.classList.add('go');
+    await sleep(1150);
     pickUpStrip();
-    await sleep(3100);
+    await sleep(2300);
     setPrintStatus(mode);
     go('thanks'); setProg(100); SFX.chime();
     printing = false;
@@ -1312,23 +1312,19 @@
   // swap the half-printed strip for a copy that floats up to the middle of the screen, as if you picked it up
   function pickUpStrip(){
     const so = $('stripOut'), held = $('held'), st = stage.getBoundingClientRect();
-    const r = so.getBoundingClientRect(), c = so.parentNode.getBoundingClientRect();
+    const r = so.getBoundingClientRect();
     const u = v => v / SCALE;
     const sx = u(r.left - st.left), sy = u(r.top - st.top), sw = u(r.width), sh = u(r.height);
-    const visTop = Math.max(r.top, c.top), visBot = Math.min(r.bottom, c.bottom, st.bottom);
-    const cutT = Math.max(0, (visTop - r.top) / r.height * 100), cutB = Math.max(0, (r.bottom - visBot) / r.height * 100);
-    const W = st.width / SCALE, H = st.height / SCALE, h = Math.min(H * 0.8, 1000), w = h / 3;
+    const W = st.width / SCALE, H = st.height / SCALE, h = Math.min(H * 0.8, 1000), w = h / 3;   // big version: most of the screen
     const left = (W - w) / 2, top = (H - h) / 2 + 10;
     Object.assign(held.style, { left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px', transition: 'none' });
     const dx = (sx + sw / 2) - (left + w / 2), dy = (sy + sh / 2) - (top + h / 2);
     held.style.transform = `translate(${dx}px, ${dy}px) scale(${sw / w})`;
-    held.style.clipPath = held.style.webkitClipPath = `inset(${cutT}% 0 ${cutB}% 0)`;
     held.classList.add('on'); so.style.visibility = 'hidden';
     held.getBoundingClientRect();
     held.style.transition = '';
     requestAnimationFrame(() => {
       held.style.transform = 'translate(0, 0) scale(1) rotate(-3deg)';
-      held.style.clipPath = held.style.webkitClipPath = 'inset(0% 0 0% 0)';
       $('p-booth').classList.add('dof');
     });
   }
@@ -1431,7 +1427,7 @@
       `Paper cassette holds 18 sheets → about <b>${18 - (sheetsPrinted % 18)}</b> left in the current load. ` +
       `Ink cassettes in a 108 pack cover 36 prints each.<br>` +
       `Print server: ${serverFound ? 'found ✓ (silent printing)' : (cfg.printMode === 'auto' ? 'not found — preview only, not printing' : 'not found')} &nbsp;·&nbsp; ` +
-      `Offline ready: ${navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes ✓' : 'not yet — reload once while online'}<br>` +
+      `Version: <b>${BOOTH_VERSION}</b> &nbsp;·&nbsp; Offline ready: ${navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes ✓' : 'not yet — reload once while online'}<br>` +
       `Digital copies: ${digitalOn() ? 'on' : 'off'} &nbsp;·&nbsp; waiting to upload: <b id="qCount">…</b><br>` +
       `Page is ${window.isSecureContext ? 'secure ✓ (camera allowed)' : '<b>not secure ✗ — camera will not work</b>'}`;
     $('settings').classList.add('open');
@@ -1621,7 +1617,16 @@
 
   // ---------- offline install ----------
   if ('serviceWorker' in navigator && window.isSecureContext) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // check for a new version every time the booth opens or comes back to the front, and switch to it on the start screen
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+      const check = () => { if (navigator.onLine) reg.update().catch(() => {}); };
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+      setInterval(check, 10 * 60 * 1000);
+    }).catch(() => {});
+    let hadSW = !!navigator.serviceWorker.controller, reloadWanted = false;
+    const reloadIfIdle = () => { if (current === 'booth' && boothMode === 'attract' && !starting) location.reload(); else reloadWanted = true; };
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadSW) reloadIfIdle(); hadSW = true; });
+    setInterval(() => { if (reloadWanted) reloadIfIdle(); }, 5000);
   }
   fit();
   addEventListener('resize', fit);
