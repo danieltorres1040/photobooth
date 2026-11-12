@@ -34,8 +34,10 @@
   .page.on{opacity:1;visibility:visible;transition:opacity .6s ease}
   .ttl{position:absolute;top:132px;left:0;right:0;margin:0;display:flex;align-items:center;justify-content:center;gap:16px;
     font-weight:700;font-size:40px;line-height:56px;letter-spacing:-0.01em;text-transform:uppercase}
-  .lensDot{width:50px;height:50px;border-radius:50%;background:#000;display:inline-block;position:relative}
-  .lensDot::after{content:"";position:absolute;width:12px;height:12px;border-radius:50%;background:#fff;opacity:.85;left:12px;top:11px}
+  /* camera "lens": black dot, white gap, ring that blinks magenta ↔ cyan */
+  .lensDot{width:34px;height:34px;border-radius:50%;background:#000;display:inline-block;margin:0 8px;
+    box-shadow:0 0 0 6px #fff,0 0 0 10px var(--mag);animation:lens 2s steps(1) infinite}
+  @keyframes lens{0%{box-shadow:0 0 0 6px #fff,0 0 0 10px var(--mag)}50%{box-shadow:0 0 0 6px #fff,0 0 0 10px var(--cyan)}}
   .body{position:absolute;top:214px;bottom:22px;left:0;right:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
   .btn{width:250px;height:64px;border:0;border-radius:0;background:#000;color:#fff;font-size:20px;font-weight:600;letter-spacing:.005em;cursor:pointer;transition:background .3s}
   .btn:disabled{background:#8c8c8c;cursor:default}
@@ -70,34 +72,38 @@
   .awning i:nth-child(1),.awning i:nth-child(5){background:#000}
   .awning i:nth-child(2){background:var(--mag)} .awning i:nth-child(3){background:var(--cyan)} .awning i:nth-child(4){background:var(--yel)}
   .booth{position:absolute;top:0;bottom:0;left:50%;width:834px;margin-left:-417px}
-  .win{position:absolute;left:60px;width:714px;height:560px;top:calc(213px + (var(--H) - 1003px) * .26);border:28px solid #000;background:#fff;overflow:hidden}
+  .win{position:absolute;left:60px;width:714px;height:560px;top:calc(213px + (var(--H) - 1003px) * .22);border:28px solid #000;background:#fff;overflow:hidden}
   #curtain{position:absolute;inset:0;width:100%;height:100%;display:block}
-  .glow{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;font-weight:700;font-size:66px;letter-spacing:-0.02em;
-    opacity:0;transition:opacity .5s;pointer-events:none;
-    text-shadow:0 0 6px #fff,0 0 18px rgba(255,220,236,.95),0 0 40px rgba(255,140,190,.9),0 0 80px rgba(253,255,100,.35)}
-  .glow.show{opacity:1;animation:glowPulse 2.4s ease-in-out infinite}
+  /* glowing text, screen-blended onto the curtains; only the halo's opacity animates, so it stays smooth on the iPad */
+  .glow{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-weight:700;font-size:66px;letter-spacing:-0.02em;
+    mix-blend-mode:screen;opacity:0;transition:opacity .8s ease;pointer-events:none}
+  .glow span{grid-area:1/1}
+  .glow .txt{color:rgba(255,255,255,.92);text-shadow:0 0 3px rgba(255,255,255,.9),0 0 12px rgba(255,214,232,.75)}
+  .glow .halo{color:rgba(255,255,255,.5);text-shadow:0 0 18px #fff,0 0 42px rgba(255,190,220,.95),0 0 80px rgba(255,150,200,.7);
+    opacity:.25;will-change:opacity}
+  .glow.show{opacity:1}
+  .glow.show .halo{animation:halo 2.8s ease-in-out infinite}
   .glow.small{font-size:50px}
-  @keyframes glowPulse{0%,100%{filter:brightness(1);transform:scale(1)}
-    50%{filter:brightness(1.18) drop-shadow(0 0 16px rgba(255,255,255,.9));transform:scale(1.04)}}
-  .base{position:absolute;left:0;right:0;height:230px;top:calc(773px + (var(--H) - 1003px) * .68)}
+  @keyframes halo{0%,100%{opacity:.25}50%{opacity:1}}
+  .base{position:absolute;left:0;right:0;height:230px;top:calc(773px + (var(--H) - 1003px) * .5)}
   .sign{position:absolute;left:161px;top:0;width:278px;height:230px;background:#000}
   .sign img{position:absolute;left:29px;top:26px;width:220px;height:auto}
   .slot{position:absolute;left:19px;right:19px;top:139px;height:73px;background:#fff}
-  .stripClip{position:absolute;left:93px;width:92px;top:172px;height:700px;overflow:hidden;z-index:3;pointer-events:none}
-  #stripOut{display:block;width:92px;height:276px;transform:translateY(-115%);box-shadow:0 6px 16px rgba(0,0,0,.25)}
+  /* the strip (shown sideways) feeds down from the top of the white slot and stops at its bottom edge */
+  .stripClip{position:absolute;left:19px;right:19px;top:139px;height:73px;overflow:hidden;pointer-events:none}
+  #stripOut{display:block;width:207px;height:69px;margin:2px auto 0;transform:translateY(-100%);box-shadow:0 1px 4px rgba(0,0,0,.18)}
   #stripOut:not(.go){visibility:hidden}
-  #stripOut.go{animation:feed 3.6s linear forwards}
-  /* the printer feeds the strip out in little steps, then it drops */
-  @keyframes feed{0%{transform:translateY(-115%)}8%{transform:translateY(-100%)}20%{transform:translateY(-86%)}26%{transform:translateY(-82%)}38%{transform:translateY(-64%)}44%{transform:translateY(-60%)}56%{transform:translateY(-40%)}62%{transform:translateY(-36%)}72%{transform:translateY(-18%)}80%{transform:translateY(-12%);animation-timing-function:cubic-bezier(.5,0,.9,.5)}100%{transform:translateY(160%)}}
+  #stripOut.go{animation:feed 3.4s linear forwards}
+  @keyframes feed{0%{transform:translateY(-100%)}14%{transform:translateY(-84%)}22%{transform:translateY(-80%)}38%{transform:translateY(-60%)}46%{transform:translateY(-56%)}
+    62%{transform:translateY(-34%)}70%{transform:translateY(-30%);animation-timing-function:cubic-bezier(.2,.6,.3,1)}100%{transform:translateY(0)}}
   .coinSlot{position:absolute;left:572px;top:40px;width:54px;height:150px;background:#000}
   .slit{position:absolute;left:21px;width:12px;top:27px;height:103px;background:#fff;transition:background .25s, box-shadow .25s}
   .coinSlot.lit .slit{background:var(--yel);box-shadow:0 0 18px 4px rgba(253,255,100,.8)}
   .coinClip{position:absolute;left:-40px;right:-40px;top:-40px;height:118px;overflow:hidden;pointer-events:none}
-  #coin{position:absolute;left:50%;top:32px;width:52px;height:52px;margin-left:-26px;border-radius:50%;background:var(--yel);border:4px solid #000;
-    box-shadow:inset 0 0 0 5px var(--yel), inset 0 0 0 8px #000;opacity:0}
+  #coin{position:absolute;left:50%;top:30px;width:58px;height:58px;margin-left:-29px;opacity:0;display:block}
   #coin.drop{animation:coin 1.1s cubic-bezier(.45,0,.55,1) forwards}
   @keyframes coin{0%{opacity:1;transform:translateY(-6px) scale(0,0)}14%{transform:translateY(0) scale(1.12,1.12)}24%{transform:translateY(0) scale(1,1)}
-    40%{transform:translateY(0) scale(-1,1)}56%{transform:translateY(0) scale(1,1)}70%{transform:translateY(0) scale(.2,1)}100%{opacity:1;transform:translateY(116px) scale(.2,1)}}
+    40%{transform:translateY(0) scale(-1,1)}56%{transform:translateY(0) scale(1,1)}70%{transform:translateY(0) scale(.2,1)}100%{opacity:1;transform:translateY(120px) scale(.2,1)}}
 
   /* shoot */
   .viewer{position:relative;width:680px;height:510px;background:var(--gray);overflow:hidden}
@@ -126,6 +132,7 @@
   .fr span{font-size:15px;font-weight:500;color:var(--muted);max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .fr.sel span{color:var(--mag);font-weight:700}
   #frameActs{margin-top:44px}
+  #p-frame .body{justify-content:flex-start;padding-top:56px}
 
   /* favs + filter: strip on the left, a column of choices on the right */
   .two{display:flex;gap:104px;align-items:stretch}
@@ -145,7 +152,8 @@
     font-size:15px;font-weight:700;display:none;place-items:center;box-shadow:0 1px 6px rgba(0,0,0,.25)}
   .pk.on .badge{display:grid}
   .pk.on.yel .badge{color:#000}
-  .looks{display:flex;flex-direction:column;justify-content:space-between;flex:1;margin-bottom:34px}
+  .looks{display:flex;flex-direction:column;gap:22px;margin-bottom:40px}
+  #p-filter .col{justify-content:center}
   .pill{width:250px;height:64px;border-radius:32px;background:#F6F4EA;border:2px solid #4a4a4a;display:flex;align-items:center;gap:10px;padding:0 14px 0 11px;
     font-size:18px;font-weight:500;color:#1a1a1a;cursor:pointer;transition:border-color .2s, color .2s, transform .1s}
   .pill:active{transform:scale(.97)}
@@ -184,7 +192,7 @@
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30}
   #flash.go{animation:flash .45s ease-out}
   @keyframes flash{0%{opacity:1}100%{opacity:0}}
-  @media (prefers-reduced-motion: reduce){ .glow.show,.sw.show,#slots div.now{animation:none} }
+  @media (prefers-reduced-motion: reduce){ .glow.show .halo,.sw.show,#slots div.now,.lensDot{animation:none} }
 
   /* settings */
   #settings{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
@@ -232,10 +240,16 @@
   <section class="page on" id="p-booth" aria-label="Press to start">
     <div class="awning" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
     <div class="booth">
-      <div class="win"><canvas id="curtain"></canvas><div class="glow show" id="boothText">Press to start</div></div>
+      <div class="win"><canvas id="curtain"></canvas><div class="glow show" id="boothText"><span class="halo">Press to start</span><span class="txt">Press to start</span></div></div>
       <div class="base">
         <div class="sign"><img src="sign-text.png" alt="Fall 26 Senior Show"><div class="slot"></div><div class="stripClip"><img id="stripOut" alt=""></div></div>
-        <div class="coinSlot" id="coinSlot"><i class="slit"></i><div class="coinClip"><i id="coin"></i></div></div>
+        <div class="coinSlot" id="coinSlot"><i class="slit"></i><div class="coinClip"><svg id="coin" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="46" fill="#E6EAD7" stroke="#000" stroke-width="7"/>
+          <path d="M50 7v86M7 50h86" stroke="#000" stroke-width="1.2"/>
+          <path d="M50 50V31a19 19 0 0 0-19 19z" fill="#529BD9"/><path d="M50 50V31a19 19 0 0 1 19 19z" fill="#C2245C"/>
+          <path d="M50 50H31a19 19 0 0 0 19 19z" fill="#FFFF00"/><path d="M50 50H69a19 19 0 0 1-19 19z" fill="#000"/>
+          <circle cx="50" cy="50" r="19" fill="none" stroke="#000" stroke-width="1"/><path d="M50 31v38M31 50h38" stroke="#000" stroke-width="1"/>
+        </svg></div></div>
       </div>
     </div>
   </section>
@@ -990,7 +1004,7 @@
   const CW = 658, CH = 504;          // inside of the black window frame
   let curO = 0;                      // 0 = closed … 1 = wide open
   function sizeCurtain(){
-    const d = Math.min(3, (window.devicePixelRatio || 1) * SCALE);
+    const d = Math.min(2, (window.devicePixelRatio || 1) * SCALE);   // capped so the curtain animation stays smooth
     cur.width = Math.round(CW * d); cur.height = Math.round(CH * d);
     drawCurtain(curO);
   }
@@ -1040,7 +1054,7 @@
   function boothText(txt, small){
     const g = $('boothText');
     if (!txt) { g.classList.remove('show'); return; }
-    g.textContent = txt; g.classList.toggle('small', !!small); g.classList.add('show');
+    g.querySelectorAll('span').forEach(sp => sp.textContent = txt); g.classList.toggle('small', !!small); g.classList.add('show');
   }
   function resetBooth(){
     boothMode = 'attract'; drawCurtain(0); boothText('Press to start');
@@ -1265,7 +1279,7 @@
 
     // booth scene: curtains close, coin goes in, the strip feeds out of the slot
     boothMode = 'print'; drawCurtain(1); boothText('');
-    $('stripOut').src = job.stripURL; $('stripOut').classList.remove('go');
+    $('stripOut').classList.remove('go'); sideways(job.stripURL).then(u => { if (printJob === job) $('stripOut').src = u; });
     $('coin').classList.remove('drop'); $('coinSlot').classList.remove('lit');
     go('booth'); setProg(90);
     await sleep(700);
@@ -1282,6 +1296,15 @@
     printing = false;
     clearTimeout(thanksT);
     thanksT = setTimeout(() => { if (current === 'thanks') goHome(); }, (cfg.printWait || 45) * 1000);
+  }
+  // the strip turned on its side (photo 1 on the left) so it sits in the sign's slot
+  function sideways(url){
+    return loadImg(url).then(im => {
+      const c = document.createElement('canvas'); c.width = 621; c.height = 207;
+      const x = c.getContext('2d'); x.translate(0, c.height); x.rotate(-Math.PI / 2);
+      x.drawImage(im, 0, 0, c.height, c.width);
+      return c.toDataURL('image/jpeg', 0.85);
+    }).catch(() => url);
   }
   function countSheets(r, mode){
     if (!r || !r.ok || mode === 'none') return;
