@@ -90,14 +90,15 @@
   .sign > img{position:absolute;left:29px;top:26px;width:220px;height:auto}
   .slot{position:absolute;left:19px;right:19px;top:139px;height:73px;background:#fff}
   /* a small strip drops out of the white slot and lands inside the sign box (never past its bottom edge) … */
-  .stripClip{position:absolute;left:0;right:0;top:139px;bottom:0;overflow:hidden;z-index:3;pointer-events:none}
-  #stripOut{display:block;width:29px;height:87px;margin:2px auto 0;transform:translateY(-102%);box-shadow:0 2px 6px rgba(0,0,0,.3)}
+  .stripClip{position:absolute;left:19px;right:19px;top:139px;height:73px;overflow:hidden;z-index:3;pointer-events:none}
+  #stripOut{display:block;width:100px;height:300px;margin:0 auto;transform:translateY(-100%);box-shadow:0 2px 6px rgba(0,0,0,.3)}
   #stripOut:not(.go){visibility:hidden}
   #stripOut.go{animation:feed .75s cubic-bezier(.5,0,.75,0) forwards}
-  @keyframes feed{0%{transform:translateY(-102%)}78%{transform:translateY(0)}88%{transform:translateY(-5%);animation-timing-function:cubic-bezier(.3,0,.6,1)}100%{transform:translateY(0)}}
+  /* full-size strip; it stops with its bottom on the white slot's bottom edge, so only the lower part shows */
+  @keyframes feed{0%{transform:translateY(-100%)}78%{transform:translateY(-227px)}88%{transform:translateY(-237px);animation-timing-function:cubic-bezier(.3,0,.6,1)}100%{transform:translateY(-227px)}}
   /* … then it's "picked up": it floats to the middle and fills the screen, with the booth thrown out of focus behind it */
   #held{position:absolute;display:none;z-index:6;transform-origin:50% 50%;box-shadow:0 30px 70px rgba(0,0,0,.35), 0 8px 20px rgba(0,0,0,.2);
-    transition:transform .8s cubic-bezier(.25,.8,.25,1);will-change:transform}
+    transition:transform .8s cubic-bezier(.25,.8,.25,1), clip-path .8s cubic-bezier(.25,.8,.25,1), -webkit-clip-path .8s cubic-bezier(.25,.8,.25,1);will-change:transform}
   #held.on{display:block}
   .dofVeil{position:absolute;inset:0;background:rgba(255,255,255,.28);opacity:0;transition:opacity .8s ease;pointer-events:none;z-index:5}
   #p-booth .booth,#p-booth .awning{transition:filter .8s ease, transform .8s ease}
@@ -417,7 +418,7 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v57';
+  const BOOTH_VERSION = 'v59';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
@@ -1312,7 +1313,8 @@
   // swap the half-printed strip for a copy that floats up to the middle of the screen, as if you picked it up
   function pickUpStrip(){
     const so = $('stripOut'), held = $('held'), st = stage.getBoundingClientRect();
-    const r = so.getBoundingClientRect();
+    const r = so.getBoundingClientRect(), c = so.parentNode.getBoundingClientRect();
+    const cutT = Math.max(0, (c.top - r.top) / r.height * 100), cutB = Math.max(0, (r.bottom - c.bottom) / r.height * 100);   // the hidden part
     const u = v => v / SCALE;
     const sx = u(r.left - st.left), sy = u(r.top - st.top), sw = u(r.width), sh = u(r.height);
     const W = st.width / SCALE, H = st.height / SCALE, h = Math.min(H * 0.8, 1000), w = h / 3;   // big version: most of the screen
@@ -1320,11 +1322,13 @@
     Object.assign(held.style, { left: left + 'px', top: top + 'px', width: w + 'px', height: h + 'px', transition: 'none' });
     const dx = (sx + sw / 2) - (left + w / 2), dy = (sy + sh / 2) - (top + h / 2);
     held.style.transform = `translate(${dx}px, ${dy}px) scale(${sw / w})`;
+    held.style.clipPath = held.style.webkitClipPath = `inset(${cutT}% 0 ${cutB}% 0)`;
     held.classList.add('on'); so.style.visibility = 'hidden';
     held.getBoundingClientRect();
     held.style.transition = '';
     requestAnimationFrame(() => {
       held.style.transform = 'translate(0, 0) scale(1) rotate(-3deg)';
+      held.style.clipPath = held.style.webkitClipPath = 'inset(0% 0 0% 0)';
       $('p-booth').classList.add('dof');
     });
   }
