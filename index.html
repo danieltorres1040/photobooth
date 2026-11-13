@@ -72,8 +72,12 @@
   .awning i:nth-child(1),.awning i:nth-child(5){background:#000}
   .awning i:nth-child(2){background:var(--mag)} .awning i:nth-child(3){background:var(--cyan)} .awning i:nth-child(4){background:var(--yel)}
   .booth{position:absolute;top:0;bottom:0;left:50%;width:834px;margin-left:-417px}
-  .win{position:absolute;left:60px;width:714px;height:560px;top:calc(213px + (var(--H) - 1003px) * .22);border:28px solid #000;background:#fff;overflow:hidden}
+  .win{position:absolute;left:60px;width:714px;height:560px;top:calc(239px + (var(--H) - 1003px) * .2);border:28px solid #000;background:#fff;overflow:hidden}
   #curtain{position:absolute;inset:0;width:100%;height:100%;display:block}
+  /* live camera behind the curtains, so guests see themselves as they open */
+  #winVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s}
+  #winVideo.on{opacity:1}
+  #winVideo.mirror{transform:scaleX(-1)}
   /* glowing text, screen-blended onto the curtains; only the halo's opacity animates, so it stays smooth on the iPad */
   .glow{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-weight:700;font-size:66px;letter-spacing:-0.02em;
     mix-blend-mode:screen;opacity:0;transition:opacity .8s ease;pointer-events:none}
@@ -85,7 +89,7 @@
   .glow.show .halo{animation:halo 2.8s ease-in-out infinite}
   .glow.small{font-size:50px}
   @keyframes halo{0%,100%{opacity:.25}50%{opacity:1}}
-  .base{position:absolute;left:0;right:0;height:230px;top:calc(773px + (var(--H) - 1003px) * .5)}
+  .base{position:absolute;left:0;right:0;height:230px;top:calc(799px + (var(--H) - 1003px) * .48)}
   .sign{position:absolute;left:161px;top:0;width:278px;height:230px;background:#000}
   .sign > img{position:absolute;left:29px;top:26px;width:220px;height:auto}
   .slot{position:absolute;left:19px;right:19px;top:139px;height:73px;background:#fff}
@@ -193,7 +197,8 @@
   .qrBox .dots3{position:absolute;inset:0;transition:opacity .3s}
   .qrCard.ready .qrBox .dots3{opacity:0}
   .qrCard.nolink .qrBox{display:none}
-  #qrStatus{font-size:14px;color:#555;text-align:center;line-height:1.35;min-height:38px}
+  #qrStatus{display:none}   /* no small print under the code */
+  .qrCard{padding-bottom:24px}
   #thanksMsg{margin-top:26px;min-height:26px;font-size:19px;font-weight:500;color:#4d4d4d;text-align:center}
   #thanksActs{margin-top:16px;flex-direction:row;gap:14px}
 
@@ -249,7 +254,7 @@
     <div class="awning" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
     <div class="dofVeil"></div><img id="held" alt="">
     <div class="booth">
-      <div class="win"><canvas id="curtain"></canvas><div class="glow show" id="boothText"><span class="halo">Press to start</span><span class="txt">Press to start</span></div></div>
+      <div class="win"><video id="winVideo" playsinline autoplay muted aria-hidden="true"></video><canvas id="curtain"></canvas><div class="glow show" id="boothText"><span class="halo">Press to start</span><span class="txt">Press to start</span></div></div>
       <div class="base">
         <div class="sign"><img src="sign-text.png" alt="Fall 26 Senior Show"><div class="slot"></div><div class="stripClip"><img id="stripOut" alt=""></div></div>
         <div class="coinSlot" id="coinSlot"><i class="slit"></i><div class="coinClip"><svg id="coin" viewBox="0 0 100 100" aria-hidden="true">
@@ -418,7 +423,7 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v59';
+  const BOOTH_VERSION = 'v62';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
@@ -494,7 +499,9 @@
       deselect(){ tone(600, .1, 'triangle', .11, 0, 400); },
       nope(){ tone(200, .13, 'square', .05); },
       tick(last){ tone(last ? 1320 : 990, .13, 'sine', .16); },
-      shutter(){ noise(.03, .26, 0, 1600, 1.2); noise(.06, .2, .055, 950, 1.2); tone(170, .06, 'sine', .05, .055, 110); },   // soft, muffled click
+      shutter(){ noise(.022, .11, 0, 1300, .7, 'lowpass'); noise(.05, .08, .045, 700, .7, 'lowpass'); tone(150, .08, 'sine', .05, .045, 95); },   // gentle, rounded click
+      stripOut(){ tone(1250, .5, 'sine', .05, 0, 640); tone(660, .11, 'sine', .12, .56, 990); tone(990, .14, 'triangle', .05, .64, 1320); },   // little slide-whistle, then a boop as it lands
+      sparkle(){ [1568, 2093, 2637].forEach((f, i) => tone(f, .22, 'sine', .05, i * .07)); },
       swoosh(d){ noise(d || 1.2, .16, 0, 600, .6, 'lowpass', true); },                                                       // fabric curtains
       clink(){ tone(2650, .32, 'triangle', .07); tone(3980, .22, 'sine', .04, .015); tone(2100, .4, 'sine', .05, .1); tone(3150, .25, 'sine', .03, .12); },
       whir(d){                                                                                                                 // little printer motor
@@ -1035,7 +1042,7 @@
   function drawCurtain(o){
     curO = o;
     const x = cctx, w = cur.width, h = cur.height, N = 40;
-    x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = '#fff'; x.fillRect(0, 0, w, h);
+    x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, w, h);   // see-through between the curtains (camera shows there)
     const E = []; for (let k=0;k<=N;k++) E.push(edgeAt(k / N, o));
     for (const side of [0, 1]) for (const s of FOLDS) {
       const px = (u, k) => {
@@ -1081,20 +1088,32 @@
     if (current !== 'booth' || boothMode !== 'attract' || starting) return;
     starting = true; SFX.unlock(); SFX.tap();
     boothText('');
-    const cam = ensureCamera().then(() => null, e => e);   // ask for the camera while the curtains open
-    SFX.swoosh(1.5);
-    await animateCurtain(curO, 1, 1600);
-    const err = await cam;
+    // start the camera first, so the curtains open onto the guest's own live picture
+    const slow = setTimeout(() => boothText('one sec…', true), 400);
+    const err = await ensureCamera().then(() => null, e => e);
+    clearTimeout(slow); boothText('');
     if (err) {
       toast(err.message || 'Could not start the camera. Check camera permission in Settings › Safari.', 6000);
-      await animateCurtain(1, 0, 1000); boothText('Press to start'); starting = false; return;
+      boothText('Press to start'); starting = false; return;
     }
+    showWinCam();
+    SFX.swoosh(1.5);
+    await animateCurtain(curO, 1, 1600);
+    await sleep(1100);                       // a moment to see yourself in the window
     newSession();
     go('shoot'); starting = false;
     await sleep(1300);
     if (current === 'shoot' && session && !session.running && !session.raws.length) runShots();
   });
 
+  function showWinCam(){
+    const wv = $('winVideo');
+    if (!stream || !stream.active) { wv.classList.remove('on'); return; }
+    if (wv.srcObject !== stream) wv.srcObject = stream;
+    wv.classList.toggle('mirror', cfg.mirror && cfg.camera === 'user');
+    const p = wv.play(); if (p && p.catch) p.catch(() => {});
+    wv.classList.add('on');
+  }
   function newSession(){
     const maxNeed = Math.max(3, ...FRAMES.map(frameN));
     session = { look: null, frameIdx: null, frame: null, need: 3, total: Math.max(maxNeed, Math.min(12, cfg.shots | 0 || 5)),
@@ -1289,20 +1308,20 @@
     pr.then(r => { if (printJob !== job) return; printRes = r; countSheets(r, mode); if (current === 'thanks') setPrintStatus(mode); });
 
     // booth scene: curtains close, coin goes in, the strip feeds out of the slot
-    boothMode = 'print'; drawCurtain(1); boothText('');
+    boothMode = 'print'; showWinCam(); drawCurtain(1); boothText('');
     $('stripOut').classList.remove('go'); $('stripOut').src = job.stripURL; $('held').src = job.stripURL;
     $('coin').classList.remove('drop'); $('coinSlot').classList.remove('lit');
     go('booth'); setProg(90);
-    await sleep(700);
+    await sleep(1300);                       // fade in on the open booth, guest still live in the window
     SFX.swoosh(1.4); await animateCurtain(1, 0, 1500);
     boothText('printing…', true);
     await sleep(250);
     const coin = $('coin'); coin.getBoundingClientRect(); coin.classList.add('drop');
     await sleep(1000); SFX.clink(); $('coinSlot').classList.add('lit');
     await sleep(500); $('coinSlot').classList.remove('lit');
-    SFX.whir(.8); const so = $('stripOut'); void so.offsetWidth; so.classList.add('go');
+    SFX.stripOut(); const so = $('stripOut'); void so.offsetWidth; so.classList.add('go');
     await sleep(1150);
-    pickUpStrip();
+    pickUpStrip(); SFX.sparkle();
     await sleep(2300);
     setPrintStatus(mode);
     go('thanks'); setProg(100); SFX.chime();
