@@ -288,7 +288,7 @@
     <h2 class="ttl">Pick your frame</h2>
     <div class="body">
       <div class="frRow" id="frameRow"></div>
-      <div class="acts" id="frameActs"><button class="btn" id="frameNext" disabled>next →</button><button class="link" id="frameBack">← back</button></div>
+      <div class="acts" id="frameActs"><button class="btn" id="frameNext" disabled>next →</button></div>
     </div>
   </section>
 
@@ -432,7 +432,7 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v63';
+  const BOOTH_VERSION = 'v64';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
@@ -1141,8 +1141,8 @@
     if (state === 'ready') msg.textContent = 'get ready…';
     if (state === 'pose') msg.textContent = `pose ${i + 1} of ${session.total}`;
     if (state === 'dev') msg.textContent = 'developing…';
-    if (state === 'done') msg.textContent = 'looking good! next, pick a frame';
-    $('shootActs').classList.toggle('on', state === 'done');
+    if (state === 'done') msg.textContent = 'looking good! ♡';
+    $('shootActs').classList.remove('on');   // no next/retake: it moves on by itself
   }
 
   async function runShots(){
@@ -1172,7 +1172,9 @@
     await loadLogo(); await ensureFonts();
     totalSessions++; store.set('booth.sessions', String(totalSessions));
     session.running = false; busy = false;
-    shootUI('done'); bumpIdle();
+    shootUI('done');
+    await sleep(900);                         // straight on to picking a frame
+    if (session && current === 'shoot') openFrame();
   }
   function retake(){
     if (!session || session.running) return;
@@ -1427,7 +1429,6 @@
   $('shootNext').addEventListener('click', () => { SFX.tap(); openFrame(); });
   $('retakeBtn').addEventListener('click', retake);
   $('frameNext').addEventListener('click', () => { SFX.tap(); openFavs(); });
-  $('frameBack').addEventListener('click', () => { SFX.tap(); setProg(20); go('shoot'); });
   $('favsNext').addEventListener('click', () => { SFX.tap(); openFilter(); });
   $('favsBack').addEventListener('click', () => { SFX.tap(); openFrame(); });
   $('filtBack').addEventListener('click', () => { SFX.tap(); filtJob++; last = null; $('devWait').classList.remove('on'); openFavs(); });
