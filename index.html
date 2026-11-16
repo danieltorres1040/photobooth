@@ -72,7 +72,7 @@
   .awning i:nth-child(1),.awning i:nth-child(5){background:#000}
   .awning i:nth-child(2){background:var(--mag)} .awning i:nth-child(3){background:var(--cyan)} .awning i:nth-child(4){background:var(--yel)}
   .booth{position:absolute;top:0;bottom:0;left:50%;width:834px;margin-left:-417px}
-  .win{position:absolute;left:60px;width:714px;height:560px;top:calc(239px + (var(--H) - 1003px) * .2);border:28px solid #000;background:#fff;overflow:hidden}
+  .win{position:absolute;left:60px;width:714px;height:560px;top:calc(239px + (var(--BH) - 1003px) * .2);border:28px solid #000;background:#fff;overflow:hidden}
   #curtain{position:absolute;inset:0;width:100%;height:100%;display:block}
   /* live camera behind the curtains, so guests see themselves as they open */
   #winVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s}
@@ -89,7 +89,7 @@
   .glow.show .halo{animation:halo 2.8s ease-in-out infinite}
   .glow.small{font-size:50px}
   @keyframes halo{0%,100%{opacity:.25}50%{opacity:1}}
-  .base{position:absolute;left:0;right:0;height:230px;top:calc(799px + (var(--H) - 1003px) * .48)}
+  .base{position:absolute;left:0;right:0;height:230px;top:calc(799px + (var(--BH) - 1003px) * .48)}
   .sign{position:absolute;left:161px;top:0;width:278px;height:230px;background:#000}
   .sign > img{position:absolute;left:29px;top:26px;width:220px;height:auto}
   .slot{position:absolute;left:19px;right:19px;top:139px;height:73px;background:#fff}
@@ -205,6 +205,47 @@
   #qrStatus{display:none}
   #thanksMsg{margin-top:26px;min-height:26px;font-size:19px;font-weight:500;color:#4d4d4d;text-align:center}
   #thanksActs{margin-top:16px;flex-direction:row;gap:14px}
+
+  /* ---------- phone layout (narrow 520-unit stage) ---------- */
+  #stage.phone .awning{height:calc(213px * var(--bs))}
+  #stage.phone .booth{bottom:auto;height:var(--BH);transform:scale(var(--bs));transform-origin:50% 0}
+  #stage.phone #prog{top:36px;width:440px;margin-left:-220px}
+  #stage.phone #prog .segs{width:440px}
+  #stage.phone #prog .lbl span{font-size:15px}
+  #stage.phone .ttl{top:90px;font-size:31px;line-height:44px;gap:10px}
+  #stage.phone .lensDot{width:26px;height:26px;margin:0 6px}
+  #stage.phone .body{top:150px;bottom:18px}
+  #stage.phone .btn{width:240px;height:58px;font-size:19px}
+  #stage.phone .viewer{width:480px;height:360px}
+  #stage.phone #slots{gap:10px;margin-top:20px}
+  #stage.phone #slots div{width:88px;height:66px}
+  #stage.phone #shootMsg{font-size:18px;margin-top:18px}
+  #stage.phone #p-frame .body{padding-top:36px}
+  #stage.phone .frRow{gap:12px}
+  #stage.phone .fr{gap:12px}
+  #stage.phone .fr canvas{outline-width:4px;outline-offset:4px}
+  #stage.phone .fr span{font-size:13px;max-width:96px}
+  #stage.phone #frameActs{margin-top:34px}
+  #stage.phone .two{gap:34px}
+  #stage.phone .stripBox{width:180px;height:540px}
+  #stage.phone .col{width:240px}
+  #stage.phone #favGrid{margin-bottom:22px}
+  #stage.phone .pk .badge{width:34px;height:34px;margin:-17px 0 0 -17px;font-size:13px}
+  #stage.phone .looks{gap:14px;margin-bottom:30px}
+  #stage.phone .pill{width:240px;height:54px;font-size:17px}
+  #stage.phone .sw{width:32px;height:32px}
+  #stage.phone .thx{width:456px;height:520px}
+  #stage.phone .thx .stripBox{width:173px;height:520px;right:18px}
+  #stage.phone #p-thanks:not(.hasqr) .thx{width:173px}
+  #stage.phone #p-thanks:not(.hasqr) .thx .stripBox{right:0}
+  #stage.phone .qrCard{width:252px;height:368px;top:70px;left:2px;padding:24px 20px}
+  #stage.phone .qrT{font-size:26px}
+  #stage.phone .qrSub{font-size:12px}
+  #stage.phone .qrBox{width:160px;height:160px}
+  #stage.phone .qrSteps{gap:10px}
+  #stage.phone .qrSteps li{font-size:12px;gap:9px}
+  #stage.phone .qrSteps b{width:24px;height:24px;font-size:10px}
+  #stage.phone #thanksMsg{font-size:17px;margin-top:20px}
 
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30}
   #flash.go{animation:flash .45s ease-out}
@@ -432,7 +473,7 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v64';
+  const BOOTH_VERSION = 'v65';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
@@ -992,13 +1033,19 @@
   // ---------- stage: one 834-unit-wide canvas for every page, scaled to the screen ----------
   const stage = $('stage');
   let SCALE = 1;
+  // iPad: 834 units wide.  Phone: a narrower 520-unit layout, so text and buttons stay a comfortable size.
+  let PHONE = false, BS = 1;
   function fit(){
     const vw = window.innerWidth, vh = window.innerHeight;
-    SCALE = Math.min(vw / 834, vh / 1060);
+    PHONE = Math.min(vw, vh) < 600;
+    SCALE = PHONE ? Math.min(vw / 520, vh / 860) : Math.min(vw / 834, vh / 1060);
     const W = vw / SCALE, H = vh / SCALE;
+    BS = PHONE ? Math.min(1, W / 834) : 1;          // the booth scene is shrunk as one piece on phones
+    stage.classList.toggle('phone', PHONE);
     stage.style.width = W + 'px'; stage.style.height = H + 'px';
     stage.style.transform = `scale(${SCALE})`;
     stage.style.setProperty('--W', W + 'px'); stage.style.setProperty('--H', H + 'px');
+    stage.style.setProperty('--bs', BS); stage.style.setProperty('--BH', (H / BS) + 'px');
     sizeCurtain();
   }
 
@@ -1030,7 +1077,7 @@
   const CW = 658, CH = 504;          // inside of the black window frame
   let curO = 0;                      // 0 = closed … 1 = wide open
   function sizeCurtain(){
-    const d = Math.min(2, (window.devicePixelRatio || 1) * SCALE);   // capped so the curtain animation stays smooth
+    const d = Math.min(2, (window.devicePixelRatio || 1) * SCALE * BS);   // capped so the curtain animation stays smooth
     cur.width = Math.round(CW * d); cur.height = Math.round(CH * d);
     drawCurtain(curO);
   }
@@ -1189,7 +1236,7 @@
   // ---------- pick your frame ----------
   function openFrame(){
     const s = session, row = $('frameRow'); row.innerHTML = '';
-    const n = FRAMES.length, fw = Math.min(132, (780 - (n - 1) * 22) / n);
+    const n = FRAMES.length, fw = PHONE ? Math.min(90, (500 - (n - 1) * 12) / n) : Math.min(132, (780 - (n - 1) * 22) / n);
     row.style.setProperty('--fw', fw + 'px');
     FRAMES.forEach((fr, i) => {
       const b = document.createElement('button'); b.className = 'fr' + (i === s.frameIdx ? ' sel' : '');
@@ -1218,8 +1265,9 @@
   function openFavs(){
     const s = session, grid = $('favGrid'); grid.innerHTML = '';
     const cols = s.total <= 5 ? 1 : 2, rows = Math.ceil(s.total / cols);
-    const th = Math.min(113, (738 - 64 - 22 - (rows - 1) * 16) / rows), tw = th * 4 / 3;
-    grid.style.gridTemplateColumns = `repeat(${cols}, ${tw}px)`; grid.style.columnGap = '16px';
+    const sH = PHONE ? 540 : 738, bH = PHONE ? 58 : 64, g = PHONE ? 12 : 16;
+    const th = Math.min(113, (sH - bH - 22 - (rows - 1) * g) / rows), tw = Math.min(th * 4 / 3, PHONE && cols > 1 ? 114 : 999);
+    grid.style.gridTemplateColumns = `repeat(${cols}, ${tw}px)`; grid.style.columnGap = g + 'px';
     s.thumbs.forEach((src, i) => {
       const b = document.createElement('button'); b.className = 'pk'; b.style.width = tw + 'px'; b.style.height = th + 'px';
       b.innerHTML = `<img src="${src}" alt="photo ${i+1}"><span class="badge"></span>`;
