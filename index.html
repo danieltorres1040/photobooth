@@ -400,8 +400,8 @@
           <div class="qrBox"><canvas id="qrCanvas" width="400" height="400"></canvas><div class="dots3" aria-hidden="true"><i></i><i></i><i></i></div></div>
           <ol class="qrSteps">
             <li><b>01</b>Scan QR with your cam</li>
-            <li><b>02</b>Press down on the photo</li>
-            <li><b>03</b>Save image to gallery</li>
+            <li><b>02</b>Tap “save to photos”</li>
+            <li><b>03</b>Save to your gallery</li>
           </ol>
           <div id="qrStatus"></div>
         </div>
@@ -463,6 +463,10 @@
       </div>
       <label>Cloudinary cloud name<input type="text" id="s_cloudName" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. dxyz123ab"></label>
       <label>Unsigned upload preset<input type="text" id="s_uploadPreset" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. photobooth"></label>
+      <label>Digital copy
+        <select id="s_liveCopy"><option value="on">live strip (moving video)</option><option value="off">photo strip</option></select>
+      </label>
+      <label>QR page address (QR site with watch.html)<input type="url" id="s_viewerUrl" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://yourname.github.io"></label>
       <label class="inline"><input type="checkbox" id="s_qrOnStrip"> Also print a small QR code on the strip</label>
       <label>QR position on strip
         <select id="s_qrPos">
@@ -491,13 +495,13 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v66';
+  const BOOTH_VERSION = 'v67';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
     printMode: 'auto', serverUrl: '', copies: 1, printWait: 45,
     countdown: 3, between: 1, camera: 'user', shots: 5, sound: true, cloudName: 'f6qum3qh', uploadPreset: 'photobooth', qrOnStrip: false, qrPos: 'br', idle: 60, mirror: true,
-    bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100
+    bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100, liveCopy: 'on', viewerUrl: ''
   };
   const store = {
     get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
@@ -514,6 +518,7 @@
     if (!cfg.uploadPreset) cfg.uploadPreset = DEFAULTS.uploadPreset;
     cfg.v = 4;
   }
+  if (!cfg.viewerUrl) { try { cfg.viewerUrl = localStorage.getItem('booth.viewer') || ''; } catch (e) {} }   // address typed on the live strip test page
   let sheetsPrinted = parseInt(store.get('booth.sheets') || '0', 10) || 0;
   let totalSessions = parseInt(store.get('booth.sessions') || '0', 10) || 0;
 
@@ -871,6 +876,191 @@
     return (m[ci] = c);
   }
 
+
+  // ---------- live strip: each photo window plays ~3 s of video around the moment it was taken ----------
+  // The camera records a short clip around every shutter. At print time the 3 picked clips are played
+  // through the chosen frame + filter (WebGL, same colour recipes as the prints) and recorded as one video.
+  const LIVE_PRE = 1.5, LIVE_POST = 1.5;
+  const LIVE_TYPE = (() => {
+    if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) return null;
+    return ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || null;
+  })();
+  function liveOn(){ return cfg.liveCopy !== 'off' && !!LIVE_TYPE && digitalOn(); }
+  function startClip(){
+    try {
+      const chunks = [], rec = new MediaRecorder(stream, { mimeType: LIVE_TYPE, videoBitsPerSecond: 4e6 });
+      rec.ondataavailable = e => e.data && e.data.size && chunks.push(e.data);
+      const done = new Promise(r => { rec.onstop = () => r(new Blob(chunks, { type: rec.mimeType || LIVE_TYPE })); rec.onerror = () => r(null); });
+      rec.start(); return { rec, done, t0: performance.now() };
+    } catch (e) { console.warn('clip', e); return null; }
+  }
+  function endClip(c, shotAt){
+    if (!c) return null;
+    const out = { offset: (shotAt - c.t0) / 1000, blob: null };
+    out.ready = new Promise(res => setTimeout(() => { try { c.rec.stop(); } catch (e) {} c.done.then(b => { out.blob = b; res(b); }); }, (LIVE_POST + 0.25) * 1000));
+    return out;
+  }
+  function lutRGBA(L){ const o = new Uint8Array(256*4); for (let i=0;i<256;i++){ o[i*4] = L.r[i]; o[i*4+1] = L.g[i]; o[i*4+2] = L.b[i]; o[i*4+3] = 255; } return o; }
+  const LOOK_ID = { none: 0, bw: 1, sepia: 2, color: 3, rio: 4, show: 5 };
+  const FS = `
+  precision highp float;
+  varying vec2 v;
+  uniform sampler2D u_img, u_lut;
+  uniform vec4 u_crop; uniform vec2 u_px; uniform float u_aspect, u_time;
+  uniform int u_look; uniform vec3 u_ink, u_deep;
+  float lum(vec3 c){ return dot(c, vec3(.3,.59,.11)); }
+  vec3 tex(vec2 p){ p = clamp(p, 0.0, 1.0); return texture2D(u_img, u_crop.xy + vec2(1.0 - p.x, p.y) * u_crop.zw).rgb; }   // mirrored + cover-cropped
+  vec3 lut(float l){ return texture2D(u_lut, vec2((clamp(l,0.0,1.0)*255.0 + 0.5)/256.0, 0.5)).rgb; }
+  float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+  vec3 screen(vec3 a, vec3 b){ return 1.0 - (1.0 - a) * (1.0 - b); }
+  void main(){
+    // soft lens: a light 5-tap blur
+    vec3 c = tex(v) * 0.4 + (tex(v + vec2(u_px.x, 0.0)) + tex(v - vec2(u_px.x, 0.0)) + tex(v + vec2(0.0, u_px.y)) + tex(v - vec2(0.0, u_px.y))) * 0.15;
+    // bloom: only bright areas spill a soft glow
+    vec3 bl = vec3(0.0);
+    for (int i=0;i<8;i++){
+      float a = float(i) * 0.785398;
+      vec2 d = vec2(cos(a), sin(a) * u_aspect);
+      vec3 s1 = tex(v + d * 0.03), s2 = tex(v + d * 0.065);
+      float k1 = max(0.0, (lum(s1) - 0.55) / 0.45), k2 = max(0.0, (lum(s2) - 0.55) / 0.45);
+      bl += s1 * k1 * k1 + s2 * k2 * k2 * 0.8;
+    }
+    bl /= 14.4;
+    vec3 o = c; float grain = 0.0, ba = 0.0;
+    if (u_look == 1) { o = lut(lum(c)); bl = lut(lum(bl)) * step(0.001, lum(bl)); ba = 0.34; grain = 0.65; }
+    else if (u_look == 2) { o = lut(lum(c)); bl = lut(lum(bl)) * step(0.001, lum(bl)); ba = 0.34; grain = 0.35; }
+    else if (u_look == 3) {
+      vec3 r = c * 255.0; float y = lum(r);
+      r = y + (r - y) * 1.3; r = vec3(14.0, 14.0, 15.0) + r * 0.95; r = (r - 128.0) * 1.04 + 128.0;
+      o = clamp(r / 255.0, 0.0, 1.0);
+      float dd = length((v - 0.5) * vec2(1.0, u_aspect)), mx = length(vec2(0.5, 0.5 * u_aspect));
+      o = screen(o, vec3(1.0, 0.98, 0.973) * 0.26 * smoothstep(min(1.0, u_aspect) * 0.34, mx, dd));
+      ba = 0.42; grain = 0.4;
+    }
+    else if (u_look == 4) {
+      vec3 r = c * 255.0; float l0 = lum(r) / 255.0, yy = v.y, sx = yy < 0.5 ? yy / 0.5 : (yy - 0.5) / 0.5;
+      float t = pow(l0, 0.9), outl = 0.23 + t * (0.96 - 0.23), y0 = lum(r);
+      r = y0 + (r - y0) * 0.8; r += outl * 255.0 - y0;
+      vec3 s0 = yy < 0.5 ? vec3(86.,36.,150.) : vec3(120.,38.,116.), s1 = yy < 0.5 ? vec3(120.,38.,116.) : vec3(176.,76.,70.);
+      vec3 h0 = yy < 0.5 ? vec3(214.,210.,226.) : vec3(246.,214.,192.), h1 = yy < 0.5 ? vec3(246.,214.,192.) : vec3(238.,226.,214.);
+      float b = max(0.0, (yy - 0.55) / 0.45) * max(0.0, 1.0 - v.x / 0.7);
+      vec3 sc = mix(mix(s0, s1, sx), vec3(178., 92., 70.), b * 0.6), hc = mix(h0, h1, sx), tc = mix(sc, hc, t);
+      o = clamp(mix(r, tc, 0.85 - 0.5 * t) / 255.0, 0.0, 1.0);
+      ba = 0.4;
+    }
+    else if (u_look == 5) {
+      vec3 m = screen(lut(lum(c)), lut(lum(bl)) * step(0.001, lum(bl)) * 0.3);
+      float l = lum(m), dk = 1.0 - l, a = min(1.0, dk * 1.3), t = pow(dk, 1.6) * 0.7;
+      vec3 paper = (vec3(253., 249., 240.) * 0.9 + u_ink * 0.1) / 255.0;
+      o = mix(paper, mix(u_ink, u_deep, t) / 255.0, a);
+      grain = 0.35;
+    }
+    if (ba > 0.0) o = screen(o, bl * ba);
+    if (grain > 0.0) o += (hash(floor(v / u_px * 0.5) + u_time) - 0.5) * 0.07 * grain;   // moving film grain
+    gl_FragColor = vec4(clamp(o, 0.0, 1.0), 1.0);
+  }`;
+  const VS = `attribute vec2 p; varying vec2 v; void main(){ v = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5); gl_Position = vec4(p, 0.0, 1.0); }`;
+  let GL = null;
+  function glSetup(){
+    if (GL) return GL;
+    const cv = document.createElement('canvas');
+    const g = cv.getContext('webgl', { premultipliedAlpha: false, preserveDrawingBuffer: true, antialias: false });
+    if (!g) throw new Error('WebGL not available');
+    const sh = (type, src) => { const o = g.createShader(type); g.shaderSource(o, src); g.compileShader(o); if (!g.getShaderParameter(o, g.COMPILE_STATUS)) throw new Error(g.getShaderInfoLog(o)); return o; };
+    const pr = g.createProgram(); g.attachShader(pr, sh(g.VERTEX_SHADER, VS)); g.attachShader(pr, sh(g.FRAGMENT_SHADER, FS)); g.linkProgram(pr);
+    if (!g.getProgramParameter(pr, g.LINK_STATUS)) throw new Error(g.getProgramInfoLog(pr));
+    g.useProgram(pr);
+    const buf = g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER, buf);
+    g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), g.STATIC_DRAW);
+    const loc = g.getAttribLocation(pr, 'p'); g.enableVertexAttribArray(loc); g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
+    const mkTex = () => { const t = g.createTexture(); g.bindTexture(g.TEXTURE_2D, t);
+      [g.TEXTURE_WRAP_S, g.TEXTURE_WRAP_T].forEach(k => g.texParameteri(g.TEXTURE_2D, k, g.CLAMP_TO_EDGE));
+      [g.TEXTURE_MIN_FILTER, g.TEXTURE_MAG_FILTER].forEach(k => g.texParameteri(g.TEXTURE_2D, k, g.LINEAR)); return t; };
+    const img = mkTex(), luts = {};
+    for (const [k, data] of [['bw', lutRGBA(BW_LUT)], ['sepia', lutRGBA(satLUT(SEPIA_LUT, 1.4))]]) { luts[k] = mkTex(); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, 256, 1, 0, g.RGBA, g.UNSIGNED_BYTE, data); }
+    const U = n => g.getUniformLocation(pr, n);
+    g.uniform1i(U('u_img'), 0); g.uniform1i(U('u_lut'), 1);
+    return (GL = { cv, g, img, luts, U: { crop: U('u_crop'), px: U('u_px'), aspect: U('u_aspect'), time: U('u_time'), look: U('u_look'), ink: U('u_ink'), deep: U('u_deep') } });
+  }
+  // render one video frame through the filter into the GL canvas, sized to the window
+  function renderWindow(vid, look, pos, W, H){
+    const G = glSetup(), g = G.g, cw = Math.round(W), ch = Math.round(H);
+    if (G.cv.width !== cw || G.cv.height !== ch) { G.cv.width = cw; G.cv.height = ch; }
+    g.viewport(0, 0, cw, ch);
+    g.activeTexture(g.TEXTURE0); g.bindTexture(g.TEXTURE_2D, G.img);
+    g.texImage2D(g.TEXTURE_2D, 0, g.RGB, g.RGB, g.UNSIGNED_BYTE, vid);
+    g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D, G.luts[look === 'sepia' ? 'sepia' : 'bw']);
+    const va = vid.videoWidth / vid.videoHeight, wa = W / H;
+    const crop = va > wa ? [(1 - wa / va) / 2, 0, wa / va, 1] : [0, (1 - va / wa) / 2, 1, va / wa];
+    g.uniform4f(G.U.crop, ...crop); g.uniform2f(G.U.px, 1 / cw, 1 / ch); g.uniform1f(G.U.aspect, W / H);
+    g.uniform1f(G.U.time, (performance.now() / 41.7 | 0) % 997);
+    g.uniform1i(G.U.look, LOOK_ID[look] || 0);
+    const inks = SHOW_INKS[pos % 3]; g.uniform3f(G.U.ink, ...inks.ink); g.uniform3f(G.U.deep, ...inks.deep);
+    g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+    return G.cv;
+  }
+
+  function drawLiveFrame(x, fr, vids, look){
+    const put = (i, X, Y, W, H) => { if (vids[i] && vids[i].videoWidth) x.drawImage(renderWindow(vids[i], look, i, W, H), X, Y, W, H); };
+    if (fr.builtin) {
+      drawStrip(x, 0, []);
+      for (let i=0;i<CLASSIC_N;i++) put(i, SIDE, M + i*(PH+GAP), PW, PH);
+      return;
+    }
+    const F = fr.fit, B = fr.bands;
+    x.fillStyle = '#fff'; x.fillRect(0, 0, STRIP_W, SHEET_H);
+    if (F.y > 0.5) { x.fillStyle = B.top; x.fillRect(0, 0, STRIP_W, F.y+1); x.fillStyle = B.bottom; x.fillRect(0, F.y+F.h-1, STRIP_W, SHEET_H); }
+    if (F.x > 0.5) { x.fillStyle = B.left; x.fillRect(0, 0, F.x+1, SHEET_H); x.fillStyle = B.right; x.fillRect(F.x+F.w-1, 0, STRIP_W, SHEET_H); }
+    fr.wins.forEach((r, i) => put(i, r.x - 3, r.y - 3, r.w + 6, r.h + 6));
+    x.drawImage(fr.canvas, F.x, F.y, F.w, F.h);
+  }
+  // returns the finished video Blob, or null if anything goes wrong (the photo strip is used instead)
+  async function buildLive(clips, fr, look){
+    const vids = [];
+    try {
+      if (!LIVE_TYPE || clips.some(c => !c)) return null;
+      const blobs = await Promise.all(clips.map(c => c.ready));
+      if (blobs.some(b => !b || !b.size)) return null;
+      for (const b of blobs) {
+        const v = document.createElement('video');
+        v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto'; v.src = URL.createObjectURL(b);
+        Object.assign(v.style, { position: 'fixed', left: '0', top: '0', width: '4px', height: '3px', opacity: '0.01', pointerEvents: 'none', zIndex: '-1' });
+        document.body.appendChild(v); vids.push(v);
+      }
+      await Promise.all(vids.map(v => new Promise((res, rej) => { if (v.readyState >= 2) res(); else { v.onloadeddata = res; v.onerror = () => rej(new Error('clip')); } })));
+      // start each clip 1.5 s before its shutter (skips the camera's frozen first frames)
+      const starts = clips.map(c => Math.max(0, c.offset - LIVE_PRE));
+      await Promise.all(vids.map((v, i) => new Promise(res => { v.onseeked = res; v.currentTime = starts[i]; setTimeout(res, 1500); })));
+      let cv = $('liveCanvas');
+      if (!cv) { cv = document.createElement('canvas'); cv.id = 'liveCanvas'; cv.width = STRIP_W; cv.height = SHEET_H;
+        Object.assign(cv.style, { position: 'fixed', left: '-9999px', top: '0' }); document.body.appendChild(cv); }
+      const x = cv.getContext('2d');
+      const cs = cv.captureStream(30), chunks = [];
+      const rec = new MediaRecorder(cs, { mimeType: LIVE_TYPE, videoBitsPerSecond: 5e6 });
+      rec.ondataavailable = e => e.data && e.data.size && chunks.push(e.data);
+      const done = new Promise(r => rec.onstop = r);
+      vids.forEach(v => { const p = v.play(); if (p && p.catch) p.catch(() => {}); });
+      // only start recording once all three are really moving, so the video never begins on a still frame
+      const t0 = performance.now();
+      await new Promise(res => { const w = () => (vids.every((v, i) => !v.paused && v.currentTime > starts[i] + 0.04) || performance.now() - t0 > 2000) ? res() : requestAnimationFrame(w); requestAnimationFrame(w); });
+      const LEN = LIVE_PRE + LIVE_POST, end = performance.now() + LEN * 1000 + 300;
+      drawLiveFrame(x, fr, vids, look);
+      rec.start();
+      await new Promise(res => {
+        const tick = () => {
+          drawLiveFrame(x, fr, vids, look);
+          const fin = vids.every((v, i) => v.ended || v.currentTime >= starts[i] + LEN);
+          if (performance.now() < end && !fin) requestAnimationFrame(tick); else res();
+        };
+        requestAnimationFrame(tick);
+      });
+      rec.stop(); await done;
+      const out = new Blob(chunks, { type: rec.mimeType || LIVE_TYPE });
+      return out.size > 1000 ? out : null;
+    } catch (e) { console.warn('live strip', e); return null; }
+    finally { vids.forEach(v => { try { v.pause(); URL.revokeObjectURL(v.src); } catch (e) {} v.remove(); }); }
+  }
+
   // ---------- strip composition ----------
   // Sheet = 4x6in @300dpi (1200x1800) holding two identical 2x6 strips. Cut down the middle.
   const SHEET_W = 1200, SHEET_H = 1800, STRIP_W = 600;
@@ -1191,7 +1381,7 @@
   function newSession(){
     const maxNeed = Math.max(3, ...FRAMES.map(frameN));
     session = { look: null, frameIdx: null, frame: null, need: 3, total: Math.max(maxNeed, Math.min(12, cfg.shots | 0 || 5)),
-                raws: [], thumbs: [], picked: [], running: false, id: newId(), fx: {} };
+                raws: [], thumbs: [], picked: [], clips: [], running: false, id: newId(), fx: {} };
     last = null; filtJob++;
     video.classList.toggle('mirror', cfg.mirror && cfg.camera === 'user');
     buildSlots(); shootUI('ready'); setProg(2);
@@ -1218,13 +1408,16 @@
       if (!session || current !== 'shoot') { busy = false; return; }
       shootUI('pose', i);
       slots[i].classList.add('now');
+      let clip = null;
       for (let n=cfg.countdown, k=0; n>0; n--, k++){
+        if (n === Math.min(2, cfg.countdown) && liveOn() && stream) clip = startClip();   // live clip starts ~2 s before the shutter
         count.textContent = n; count.style.color = DOTS[k % 2]; SFX.tick(n === 1);
         count.classList.remove('pop'); void count.offsetWidth; count.classList.add('pop');
         await sleep(1000);
       }
       count.textContent = '';
-      const raw = rawFrame(); SFX.shutter();
+      const raw = rawFrame(), shotAt = performance.now(); SFX.shutter();
+      session.clips[i] = endClip(clip, shotAt);
       const f = $('flash'); f.className = ''; void f.offsetWidth; f.className = 'go';
       await sleep(30);
       session.raws.push(raw);
@@ -1244,7 +1437,7 @@
   function retake(){
     if (!session || session.running) return;
     SFX.tap();
-    Object.assign(session, { raws: [], thumbs: [], picked: [], fx: {}, look: null });
+    Object.assign(session, { raws: [], thumbs: [], picked: [], clips: [], fx: {}, look: null });
     last = null; filtJob++;
     buildSlots(); shootUI('ready'); setProg(2);
     if (current !== 'shoot') go('shoot');
@@ -1380,7 +1573,9 @@
     printJob = job; printRes = null;
     // thanks page is prepared now; the digital copy starts uploading straight away
     $('thanksStrip').src = job.stripURL; $('thanksMsg').textContent = ''; showQR(id);
-    sendCopy(id, job.stripURL);
+    const s = session;
+    const liveP = liveOn() ? buildLive(s.picked.map(i => s.clips[i]), s.frame, s.look) : Promise.resolve(null);
+    sendCopy(id, job.stripURL, liveP);
     const pr = mode === 'server' ? printViaServer(job.sheetURL) : Promise.resolve({ ok: true });
     pr.then(r => { if (printJob !== job) return; printRes = r; countSheets(r, mode); if (current === 'thanks') setPrintStatus(mode); });
 
@@ -1515,7 +1710,7 @@
     const now = Date.now(); taps = taps.filter(t => now - t < 3000); taps.push(now);
     if (taps.length >= 5) { taps = []; openSettings(); }
   });
-  const fields = ['eventName','footer','printMode','serverUrl','copies','printWait','countdown','between','camera','shots','idle','bg','fg','logoSize','cloudName','uploadPreset','qrPos'];
+  const fields = ['eventName','footer','printMode','serverUrl','copies','printWait','countdown','between','camera','shots','idle','bg','fg','logoSize','cloudName','uploadPreset','qrPos','liveCopy','viewerUrl'];
   function openSettings(){
     fields.forEach(k => $('s_'+k).value = cfg[k]);
     $('s_mirror').checked = !!cfg.mirror;
@@ -1540,7 +1735,7 @@
     cfg.mirror = $('s_mirror').checked;
     cfg.qrOnStrip = $('s_qrOnStrip').checked;
     cfg.sound = $('s_sound').checked;
-    cfg.cloudName = (cfg.cloudName||'').trim(); cfg.uploadPreset = (cfg.uploadPreset||'').trim();
+    cfg.cloudName = (cfg.cloudName||'').trim(); cfg.uploadPreset = (cfg.uploadPreset||'').trim(); cfg.viewerUrl = (cfg.viewerUrl||'').trim();
     cfg.copies = Math.max(1, Math.min(5, cfg.copies|0 || 1));
     cfg.countdown = Math.max(1, Math.min(10, cfg.countdown|0 || 3));
     cfg.logoSize = Math.max(50, Math.min(150, cfg.logoSize|0 || 100));
@@ -1618,15 +1813,26 @@
     const a = 'abcdefghjkmnpqrstuvwxyz23456789', r = crypto.getRandomValues(new Uint8Array(10));
     return 'pb-' + [...r].map(x => a[x % a.length]).join('');
   }
-  function copyURL(id){ return `https://res.cloudinary.com/${encodeURIComponent(cfg.cloudName)}/image/upload/${id}.jpg`; }
-  async function uploadStrip(id, blob){
+  // the QR code opens our save page (watch.html on the QR site) when one is set, otherwise the file itself
+  function copyURL(id, kind){
+    kind = kind || 'image';
+    const base = (cfg.viewerUrl || '').trim();
+    if (base) {
+      const page = /\.html$/i.test(base) ? base : base.replace(/\/?$/, '/') + 'watch.html';
+      return `${page}?c=${encodeURIComponent(cfg.cloudName)}&id=${encodeURIComponent(id)}${kind === 'image' ? '&t=i' : ''}`;
+    }
+    return `https://res.cloudinary.com/${encodeURIComponent(cfg.cloudName)}/${kind}/upload/${id}.${kind === 'video' ? 'mp4' : 'jpg'}`;
+  }
+  async function uploadStrip(id, blob, kind){
+    kind = kind || 'image';
     const fd = new FormData();
-    fd.append('file', blob, id + '.jpg'); fd.append('upload_preset', cfg.uploadPreset); fd.append('public_id', id);
-    const r = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cfg.cloudName)}/image/upload`, { method: 'POST', body: fd });
+    fd.append('file', blob, id + (kind === 'video' ? (blob.type.includes('webm') ? '.webm' : '.mp4') : '.jpg'));
+    fd.append('upload_preset', cfg.uploadPreset); fd.append('public_id', id);
+    const r = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cfg.cloudName)}/${kind}/upload`, { method: 'POST', body: fd });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
       const msg = (j.error && j.error.message) || ('upload failed (' + r.status + ')');
-      if (/already exists/i.test(msg)) return { secure_url: copyURL(id) };   // uploaded on an earlier try
+      if (/already exists/i.test(msg)) return { ok: true };   // uploaded on an earlier try
       const e = new Error(msg); e.permanent = r.status >= 400 && r.status < 500; throw e;
     }
     return j;
@@ -1642,7 +1848,7 @@
     });
   }
   async function qTx(mode, fn){ const db = await qOpen(); return new Promise((res, rej) => { const t = db.transaction('q', mode), s = t.objectStore('q'); const out = fn(s); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); }); }
-  async function queueAdd(id, blob){ try { await qTx('readwrite', s => s.put({ id, blob, cloud: cfg.cloudName, preset: cfg.uploadPreset, t: Date.now() })); } catch(e){ console.warn(e); } }
+  async function queueAdd(id, blob, kind){ try { await qTx('readwrite', s => s.put({ id, blob, kind: kind || 'image', cloud: cfg.cloudName, preset: cfg.uploadPreset, t: Date.now() })); } catch(e){ console.warn(e); } }
   async function queueCount(){ try { return await qTx('readonly', s => s.count()); } catch(e){ return 0; } }
   let flushing = false;
   async function flushQueue(){
@@ -1650,7 +1856,7 @@
     try {
       const items = await qTx('readonly', s => s.getAll()) || [];
       for (const it of items){
-        try { await uploadStrip(it.id, it.blob); await qTx('readwrite', s => s.delete(it.id)); }
+        try { await uploadStrip(it.id, it.blob, it.kind || 'image'); await qTx('readwrite', s => s.delete(it.id)); }
         catch (e) { if (e.permanent && !/preset|cloud/i.test(e.message)) await qTx('readwrite', s => s.delete(it.id)); else break; }
       }
     } catch(e){ console.warn(e); }
@@ -1666,16 +1872,25 @@
     const c = $('qrCanvas'); c.getContext('2d').clearRect(0,0,c.width,c.height);
     $('qrStatus').textContent = 'making your digital copy…';
   }
-  async function sendCopy(id, stripURL){
+  async function sendCopy(id, stripURL, liveP){
     if (!digitalOn() || !id) return;
-    const blob = dataURLToFile(stripURL, id + '.jpg');
+    let blob = dataURLToFile(stripURL, id + '.jpg'), kind = 'image';
     const st = $('qrStatus');
     const mine = () => printJob && session && session.id === id;
+    const video = liveP ? await liveP : null;
+    if (video) { blob = video; kind = 'video'; }
     try {
-      const j = await uploadStrip(id, blob);
+      try { await uploadStrip(id, blob, kind); }
+      catch (e) {
+        // video refused (e.g. the upload preset only allows images): send the photo strip instead
+        if (kind !== 'video' || !e.permanent) throw e;
+        console.warn('video upload refused, sending photo', e);
+        blob = dataURLToFile(stripURL, id + '.jpg'); kind = 'image';
+        await uploadStrip(id, blob, kind);
+      }
       if (!mine()) return;
       // only now is the link live: draw the code and reveal it
-      const url = (j.secure_url && !j.secure_url.includes(id)) ? j.secure_url : copyURL(id);
+      const url = copyURL(id, kind);
       const c = $('qrCanvas'); drawQR(c.getContext('2d'), url, 0, 0, c.width);
       $('qrCard').classList.add('ready');
       if (current === 'thanks' && currentMode() === 'none') $('thanksMsg').textContent = 'scan the code to save your strip ♡';
@@ -1683,7 +1898,7 @@
     } catch (e) {
       console.warn('upload', e);
       if (e.permanent) { if (mine()) { $('qrCard').classList.add('nolink'); st.textContent = 'digital copy unavailable right now — ask a booth helper'; } toast('Upload error: ' + e.message, 8000); }
-      else { await queueAdd(id, blob); if (mine()) { $('qrCard').classList.add('nolink'); st.innerHTML = 'the booth is offline right now —<br>your strip is saved and will upload later'; } }
+      else { await queueAdd(id, blob, kind); if (mine()) { $('qrCard').classList.add('nolink'); st.innerHTML = 'the booth is offline right now —<br>your strip is saved and will upload later'; } }
     }
   }
   function drawStripQR(ctx, x0, id){
