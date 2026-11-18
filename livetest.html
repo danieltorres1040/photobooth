@@ -47,8 +47,10 @@
   <div class="row">
     <label>Frame<select id="frameSel"></select></label>
     <label>Filter<select id="lookSel">
-      <option value="color">full color</option>
       <option value="bw">classic b&amp;w</option>
+      <option value="sepia">vintage</option>
+      <option value="color">full color</option>
+      <option value="rio">rio de janeiro</option>
       <option value="show">to be continued</option>
     </select></label>
     <button class="btn" id="go">start test</button>
@@ -177,24 +179,139 @@
   }
 
   // ---------- build the moving strip ----------
-  const INKS = ['#E73D7D', '#4DABE9', '#FDFF64'];
-  function drawCoverVideo(x, v, X, Y, W, H){
-    const sw = v.videoWidth, sh = v.videoHeight; if (!sw) return;
-    const r = Math.max(W/sw, H/sh), cw = W/r, ch = H/r;
-    x.save(); x.translate(X + W, Y); x.scale(-1, 1);          // mirror, like the booth
-    x.drawImage(v, (sw-cw)/2, (sh-ch)/2, cw, ch, 0, 0, W, H);
-    x.restore();
+  // ---------- video filters (WebGL, ported from the booth's photo filters so video matches the prints) ----------
+  const BW_LUT = (() => {
+    const SH=[5,4,3], MID=[118,111,101], HI=[248,244,234], o=new Uint8Array(256*4);
+    for (let i=0;i<256;i++){
+      let l = i/255; l = Math.pow(l, 0.97); l = l*l*(3-2*l); l = Math.min(1, Math.max(0, 0.5 + (l-0.5)*1.18)); l = 0.005 + l*0.99;
+      let A, B, t; if (l < 0.5) { A=SH; B=MID; t=l/0.5; } else { A=MID; B=HI; t=(l-0.5)/0.5; }
+      for (let c=0;c<3;c++) o[i*4+c] = A[c]+(B[c]-A[c])*t; o[i*4+3] = 255;
+    }
+    return o;
+  })();
+  const SEPIA_LUT = (() => {
+    const P = [[0,[12,4,2]],[8,[24,10,5]],[24,[35,19,9]],[40,[51,35,25]],[56,[69,52,42]],[72,[85,68,58]],[88,[100,84,74]],
+               [104,[117,101,91]],[120,[132,116,107]],[136,[147,132,123]],[152,[162,149,138]],[168,[176,165,154]],
+               [184,[191,182,172]],[200,[206,198,189]],[216,[222,215,204]],[232,[235,231,223]],[255,[248,246,241]]];
+    const o = new Uint8Array(256*4);
+    for (let i=0;i<256;i++){
+      let l = i/255; l = Math.pow(l, 1.12); l = 0.8*(l*l*(3-2*l)) + 0.2*l;
+      const v = l*255; let k = 0; while (k < P.length-2 && P[k+1][0] < v) k++;
+      const [a0, A] = P[k], [a1, B] = P[k+1], t = Math.min(1, Math.max(0, (v-a0)/(a1-a0)));
+      const c = [0,1,2].map(j => A[j]+(B[j]-A[j])*t), y = 0.3*c[0] + 0.59*c[1] + 0.11*c[2];
+      for (let j=0;j<3;j++) o[i*4+j] = Math.max(0, Math.min(255, y + (c[j]-y)*1.4));   // satLUT(SEPIA_LUT, 1.4)
+      o[i*4+3] = 255;
+    }
+    return o;
+  })();
+  const SHOW_INKS = [
+    { ink: [236, 96, 168], deep: [150, 52, 112] },   // soft magenta
+    { ink: [0, 174, 239],  deep: [18, 52, 69] },     // cyan
+    { ink: [245, 216, 64], deep: [112, 84, 16] }     // butter yellow (same as the prints)
+  ];
+  const LOOK_ID = { none: 0, bw: 1, sepia: 2, color: 3, rio: 4, show: 5 };
+  const FS = `
+  precision highp float;
+  varying vec2 v;
+  uniform sampler2D u_img, u_lut;
+  uniform vec4 u_crop; uniform vec2 u_px; uniform float u_aspect, u_time;
+  uniform int u_look; uniform vec3 u_ink, u_deep;
+  float lum(vec3 c){ return dot(c, vec3(.3,.59,.11)); }
+  vec3 tex(vec2 p){ p = clamp(p, 0.0, 1.0); return texture2D(u_img, u_crop.xy + vec2(1.0 - p.x, p.y) * u_crop.zw).rgb; }   // mirrored + cover-cropped
+  vec3 lut(float l){ return texture2D(u_lut, vec2((clamp(l,0.0,1.0)*255.0 + 0.5)/256.0, 0.5)).rgb; }
+  float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+  vec3 screen(vec3 a, vec3 b){ return 1.0 - (1.0 - a) * (1.0 - b); }
+  void main(){
+    // soft lens: a light 5-tap blur
+    vec3 c = tex(v) * 0.4 + (tex(v + vec2(u_px.x, 0.0)) + tex(v - vec2(u_px.x, 0.0)) + tex(v + vec2(0.0, u_px.y)) + tex(v - vec2(0.0, u_px.y))) * 0.15;
+    // bloom: only bright areas spill a soft glow
+    vec3 bl = vec3(0.0);
+    for (int i=0;i<8;i++){
+      float a = float(i) * 0.785398;
+      vec2 d = vec2(cos(a), sin(a) * u_aspect);
+      vec3 s1 = tex(v + d * 0.03), s2 = tex(v + d * 0.065);
+      float k1 = max(0.0, (lum(s1) - 0.55) / 0.45), k2 = max(0.0, (lum(s2) - 0.55) / 0.45);
+      bl += s1 * k1 * k1 + s2 * k2 * k2 * 0.8;
+    }
+    bl /= 14.4;
+    vec3 o = c; float grain = 0.0, ba = 0.0;
+    if (u_look == 1) { o = lut(lum(c)); bl = lut(lum(bl)) * step(0.001, lum(bl)); ba = 0.34; grain = 0.65; }
+    else if (u_look == 2) { o = lut(lum(c)); bl = lut(lum(bl)) * step(0.001, lum(bl)); ba = 0.34; grain = 0.35; }
+    else if (u_look == 3) {
+      vec3 r = c * 255.0; float y = lum(r);
+      r = y + (r - y) * 1.3; r = vec3(14.0, 14.0, 15.0) + r * 0.95; r = (r - 128.0) * 1.04 + 128.0;
+      o = clamp(r / 255.0, 0.0, 1.0);
+      float dd = length((v - 0.5) * vec2(1.0, u_aspect)), mx = length(vec2(0.5, 0.5 * u_aspect));
+      o = screen(o, vec3(1.0, 0.98, 0.973) * 0.26 * smoothstep(min(1.0, u_aspect) * 0.34, mx, dd));
+      ba = 0.42; grain = 0.4;
+    }
+    else if (u_look == 4) {
+      vec3 r = c * 255.0; float l0 = lum(r) / 255.0, yy = v.y, sx = yy < 0.5 ? yy / 0.5 : (yy - 0.5) / 0.5;
+      float t = pow(l0, 0.9), outl = 0.23 + t * (0.96 - 0.23), y0 = lum(r);
+      r = y0 + (r - y0) * 0.8; r += outl * 255.0 - y0;
+      vec3 s0 = yy < 0.5 ? vec3(86.,36.,150.) : vec3(120.,38.,116.), s1 = yy < 0.5 ? vec3(120.,38.,116.) : vec3(176.,76.,70.);
+      vec3 h0 = yy < 0.5 ? vec3(214.,210.,226.) : vec3(246.,214.,192.), h1 = yy < 0.5 ? vec3(246.,214.,192.) : vec3(238.,226.,214.);
+      float b = max(0.0, (yy - 0.55) / 0.45) * max(0.0, 1.0 - v.x / 0.7);
+      vec3 sc = mix(mix(s0, s1, sx), vec3(178., 92., 70.), b * 0.6), hc = mix(h0, h1, sx), tc = mix(sc, hc, t);
+      o = clamp(mix(r, tc, 0.85 - 0.5 * t) / 255.0, 0.0, 1.0);
+      ba = 0.4;
+    }
+    else if (u_look == 5) {
+      vec3 m = screen(lut(lum(c)), lut(lum(bl)) * step(0.001, lum(bl)) * 0.3);
+      float l = lum(m), dk = 1.0 - l, a = min(1.0, dk * 1.3), t = pow(dk, 1.6) * 0.7;
+      vec3 paper = (vec3(253., 249., 240.) * 0.9 + u_ink * 0.1) / 255.0;
+      o = mix(paper, mix(u_ink, u_deep, t) / 255.0, a);
+      grain = 0.35;
+    }
+    if (ba > 0.0) o = screen(o, bl * ba);
+    if (grain > 0.0) o += (hash(floor(v / u_px * 0.5) + u_time) - 0.5) * 0.07 * grain;   // moving film grain
+    gl_FragColor = vec4(clamp(o, 0.0, 1.0), 1.0);
+  }`;
+  const VS = `attribute vec2 p; varying vec2 v; void main(){ v = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5); gl_Position = vec4(p, 0.0, 1.0); }`;
+  let GL = null;
+  function glSetup(){
+    if (GL) return GL;
+    const cv = document.createElement('canvas');
+    const g = cv.getContext('webgl', { premultipliedAlpha: false, preserveDrawingBuffer: true, antialias: false });
+    if (!g) throw new Error('WebGL not available');
+    const sh = (type, src) => { const o = g.createShader(type); g.shaderSource(o, src); g.compileShader(o); if (!g.getShaderParameter(o, g.COMPILE_STATUS)) throw new Error(g.getShaderInfoLog(o)); return o; };
+    const pr = g.createProgram(); g.attachShader(pr, sh(g.VERTEX_SHADER, VS)); g.attachShader(pr, sh(g.FRAGMENT_SHADER, FS)); g.linkProgram(pr);
+    if (!g.getProgramParameter(pr, g.LINK_STATUS)) throw new Error(g.getProgramInfoLog(pr));
+    g.useProgram(pr);
+    const buf = g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER, buf);
+    g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), g.STATIC_DRAW);
+    const loc = g.getAttribLocation(pr, 'p'); g.enableVertexAttribArray(loc); g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
+    const mkTex = () => { const t = g.createTexture(); g.bindTexture(g.TEXTURE_2D, t);
+      [g.TEXTURE_WRAP_S, g.TEXTURE_WRAP_T].forEach(k => g.texParameteri(g.TEXTURE_2D, k, g.CLAMP_TO_EDGE));
+      [g.TEXTURE_MIN_FILTER, g.TEXTURE_MAG_FILTER].forEach(k => g.texParameteri(g.TEXTURE_2D, k, g.LINEAR)); return t; };
+    const img = mkTex(), luts = {};
+    for (const [k, data] of [['bw', BW_LUT], ['sepia', SEPIA_LUT]]) { luts[k] = mkTex(); g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, 256, 1, 0, g.RGBA, g.UNSIGNED_BYTE, data); }
+    const U = n => g.getUniformLocation(pr, n);
+    g.uniform1i(U('u_img'), 0); g.uniform1i(U('u_lut'), 1);
+    return (GL = { cv, g, img, luts, U: { crop: U('u_crop'), px: U('u_px'), aspect: U('u_aspect'), time: U('u_time'), look: U('u_look'), ink: U('u_ink'), deep: U('u_deep') } });
+  }
+  // render one video frame through the filter into the GL canvas, sized to the window
+  function renderWindow(vid, look, pos, W, H){
+    const G = glSetup(), g = G.g, cw = Math.round(W), ch = Math.round(H);
+    if (G.cv.width !== cw || G.cv.height !== ch) { G.cv.width = cw; G.cv.height = ch; }
+    g.viewport(0, 0, cw, ch);
+    g.activeTexture(g.TEXTURE0); g.bindTexture(g.TEXTURE_2D, G.img);
+    g.texImage2D(g.TEXTURE_2D, 0, g.RGB, g.RGB, g.UNSIGNED_BYTE, vid);
+    g.activeTexture(g.TEXTURE1); g.bindTexture(g.TEXTURE_2D, G.luts[look === 'sepia' ? 'sepia' : 'bw']);
+    const va = vid.videoWidth / vid.videoHeight, wa = W / H;
+    const crop = va > wa ? [(1 - wa / va) / 2, 0, wa / va, 1] : [0, (1 - va / wa) / 2, 1, va / wa];
+    g.uniform4f(G.U.crop, ...crop); g.uniform2f(G.U.px, 1 / cw, 1 / ch); g.uniform1f(G.U.aspect, W / H);
+    g.uniform1f(G.U.time, (performance.now() / 41.7 | 0) % 997);
+    g.uniform1i(G.U.look, LOOK_ID[look] || 0);
+    const inks = SHOW_INKS[pos % 3]; g.uniform3f(G.U.ink, ...inks.ink); g.uniform3f(G.U.deep, ...inks.deep);
+    g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+    return G.cv;
   }
   function drawFrameOn(x, fr, vids, look){
-    x.globalCompositeOperation = 'source-over';
     x.fillStyle = fr.builtin ? '#fffdf8' : '#fff'; x.fillRect(0, 0, STRIP_W, SHEET_H);
     fr.wins.slice(0, 3).forEach((r, i) => {
       const bx = r.x - 3, by = r.y - 3, bw = r.w + 6, bh = r.h + 6;
-      x.save(); x.beginPath(); x.rect(bx, by, bw, bh); x.clip();
-      drawCoverVideo(x, vids[i], bx, by, bw, bh);
-      if (look === 'bw') { x.globalCompositeOperation = 'saturation'; x.fillStyle = '#808080'; x.fillRect(bx, by, bw, bh); }
-      if (look === 'show') { x.globalCompositeOperation = 'color'; x.fillStyle = INKS[i]; x.fillRect(bx, by, bw, bh); }
-      x.restore(); x.globalCompositeOperation = 'source-over';
+      if (vids[i].videoWidth) x.drawImage(renderWindow(vids[i], look, i, bw, bh), bx, by, bw, bh);
     });
     if (fr.builtin) {
       if (logo) { const s = Math.min(300 / logo.width, 66 / logo.height), lw = logo.width*s, lh = logo.height*s; x.drawImage(logo, 300 - lw/2, 1700 - lh/2, lw, lh); }
@@ -262,7 +379,8 @@
       const j = await r.json();
       if (!r.ok) throw new Error((j.error && j.error.message) || r.status);
       // .mp4 delivery so iPhones can play and save it even if the recording was webm
-      const url = j.secure_url.replace(/\.(webm|mov|mp4)$/i, '.mp4');
+      // the code opens our own viewer page, which has a real "save to photos" button
+      const url = new URL(`watch.html?c=${encodeURIComponent(cloud)}&id=${encodeURIComponent(j.public_id || id)}`, location.href).href;
       drawQR($('qr').getContext('2d'), url, 0, 0, 400); $('qr').style.display = 'block';
       $('status').textContent = `uploaded in ${((performance.now() - t0) / 1000).toFixed(1)} s — scan to try it on a phone`;
     } catch (e) { $('status').textContent = 'upload failed: ' + e.message + ' (the upload preset may need video allowed)'; }
