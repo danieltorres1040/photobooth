@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Live Strip Test</title>
+<script src="qr.js"></script>
+<style>
+  @font-face{font-family:Inter;font-weight:400;src:url(fonts/Inter-Regular.woff) format('woff')}
+  @font-face{font-family:Inter;font-weight:600;src:url(fonts/Inter-SemiBold.woff) format('woff')}
+  @font-face{font-family:Inter;font-weight:700;src:url(fonts/Inter-Bold.woff) format('woff')}
+  :root{--mag:#E73D7D;--cyan:#4DABE9;--yel:#FDFF64}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#fff;color:#000;font-family:Inter,-apple-system,system-ui,sans-serif}
+  body{padding:max(20px,env(safe-area-inset-top)) 16px 40px}
+  .wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+  h1{font-size:30px;font-weight:700;text-transform:uppercase;margin:6px 0 0;letter-spacing:-.01em}
+  p{margin:0;color:#555;line-height:1.45}
+  .cam{position:relative;width:100%;aspect-ratio:4/3;background:#d9d9d9;overflow:hidden}
+  .cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+  #count{position:absolute;inset:0;display:grid;place-items:center;font-size:160px;font-weight:700;color:#fff;text-shadow:0 4px 24px rgba(0,0,0,.4)}
+  #rec{position:absolute;top:12px;left:12px;background:var(--mag);color:#fff;font-size:14px;font-weight:600;padding:5px 10px;display:none}
+  #rec.on{display:block}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none}
+  #flash.go{animation:fl .45s ease-out}@keyframes fl{0%{opacity:1}100%{opacity:0}}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+  label{display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600}
+  select{font:inherit;font-size:16px;padding:10px 12px;border:2px solid #000;border-radius:0;background:#fff;min-width:200px}
+  .btn{font:inherit;font-size:18px;font-weight:600;background:#000;color:#fff;border:0;padding:0 26px;height:56px;cursor:pointer}
+  .btn:disabled{background:#8c8c8c}
+  .btn.ghost{background:#fff;color:#000;border:2px solid #000}
+  #status{font-size:17px;font-weight:600;min-height:24px}
+  .out{display:none;gap:24px;align-items:flex-start;flex-wrap:wrap}
+  .out.on{display:flex}
+  .out video{width:220px;height:660px;background:#d9d9d9;box-shadow:0 10px 30px rgba(0,0,0,.18);display:block}
+  .side{display:flex;flex-direction:column;gap:12px;flex:1;min-width:240px}
+  .stats{background:#F4F7EE;padding:14px 16px;font-size:15px;line-height:1.6}
+  #qr{width:200px;height:200px;display:none;background:#fff}
+  #log{font:12px/1.4 ui-monospace,monospace;color:#a00;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Live strip test</h1>
+  <p>Takes 3 photos like the booth and records about 1.5 seconds before and after each one, then builds a moving strip in the frame you pick. Nothing here changes the real booth.</p>
+  <div class="cam"><video id="video" playsinline autoplay muted></video><div id="count"></div><div id="rec">● REC</div></div>
+  <div class="row">
+    <label>Frame<select id="frameSel"></select></label>
+    <label>Filter<select id="lookSel">
+      <option value="color">full color</option>
+      <option value="bw">classic b&amp;w</option>
+      <option value="show">to be continued</option>
+    </select></label>
+    <button class="btn" id="go">start test</button>
+  </div>
+  <div id="status">tap “start test” — the camera turns on first</div>
+  <div class="out" id="out">
+    <video id="result" playsinline loop muted autoplay controls></video>
+    <div class="side">
+      <div class="stats" id="stats"></div>
+      <button class="btn" id="save">save / share video</button>
+      <button class="btn ghost" id="again">build again (new frame or filter)</button>
+      <button class="btn ghost" id="upload">test upload + QR code</button>
+      <canvas id="qr" width="400" height="400"></canvas>
+    </div>
+  </div>
+  <div id="log"></div>
+</div>
+<div id="flash"></div>
+<canvas id="strip" width="600" height="1800" style="position:fixed;left:-9999px;top:0"></canvas>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const log = m => { $('log').textContent += m + '\n'; };
+  window.addEventListener('error', e => log('error: ' + e.message));
+  window.addEventListener('unhandledrejection', e => log('error: ' + (e.reason && e.reason.message || e.reason)));
+  let cfg = {}; try { cfg = JSON.parse(localStorage.getItem('booth.cfg') || '{}'); } catch (e) {}
+  const cloud = cfg.cloudName || 'f6qum3qh', preset = cfg.uploadPreset || 'photobooth';
+
+  const PRE = 1500, POST = 1500;                 // live-photo window around each shutter
+  const STRIP_W = 600, SHEET_H = 1800;
+  const video = $('video');
+  let stream = null, clips = [], result = null;
+
+  // ---------- formats ----------
+  function pickType(){
+    const t = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+    if (!window.MediaRecorder) return null;
+    return t.find(x => MediaRecorder.isTypeSupported(x)) || '';
+  }
+  const TYPE = pickType();
+
+  // ---------- frames (same files as the booth) ----------
+  let FRAMES = [];
+  const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  function findRegions(w, h, test, minFill){
+    const seen = new Uint8Array(w*h), out = [], stack = [];
+    for (let i0=0;i0<w*h;i0++){
+      if (seen[i0] || !test(i0)) continue;
+      let minx=w, miny=h, maxx=0, maxy=0, area=0; stack.push(i0); seen[i0]=1;
+      while (stack.length){
+        const i = stack.pop(), px = i % w, py = (i / w) | 0; area++;
+        if (px<minx) minx=px; if (px>maxx) maxx=px; if (py<miny) miny=py; if (py>maxy) maxy=py;
+        for (const j of [px>0?i-1:-1, px<w-1?i+1:-1, py>0?i-w:-1, py<h-1?i+w:-1]) if (j>=0 && !seen[j] && test(j)) { seen[j]=1; stack.push(j); }
+      }
+      const bw = maxx-minx+1, bh = maxy-miny+1, touches = minx<=0 || miny<=0 || maxx>=w-1 || maxy>=h-1;
+      if (area > 0.015*w*h && !touches && area/(bw*bh) >= minFill) out.push({ x: minx, y: miny, w: bw, h: bh });
+    }
+    return out;
+  }
+  async function prepFrame(f){
+    const img = await loadImg(f.file), W = img.naturalWidth, H = img.naturalHeight;
+    const sc = Math.min(1, 240 / W), w = Math.round(W*sc), h = Math.round(H*sc);
+    const s = document.createElement('canvas'); s.width = w; s.height = h;
+    const sx = s.getContext('2d'); sx.drawImage(img, 0, 0, w, h);
+    const d = sx.getImageData(0, 0, w, h).data;
+    const wins = findRegions(w, h, i => d[i*4+3] < 128, 0.5).sort((a, b) => a.y - b.y || a.x - b.x);
+    const k = Math.min(STRIP_W / W, SHEET_H / H), fw = W*k, fh = H*k, fx = (STRIP_W - fw)/2, fy = (SHEET_H - fh)/2;
+    return { name: f.name || f.file, img, fit: { x: fx, y: fy, w: fw, h: fh },
+      wins: wins.map(r => ({ x: fx + r.x/sc*k, y: fy + r.y/sc*k, w: r.w/sc*k, h: r.h/sc*k })) };
+  }
+  const CLASSIC = { name: 'classic', builtin: true, wins: [0,1,2].map(i => ({ x: 52, y: 46 + i*(372+43), w: 496, h: 372 })) };
+  let logo = null; loadImg('logo.png').then(i => logo = i).catch(() => {});
+  async function loadFrames(){
+    let list = [];
+    try { list = (await (await fetch('frames.json', { cache: 'no-cache' })).json()).frames || []; } catch (e) { log('frames.json: ' + e.message); }
+    for (const f of list) {
+      if (f.builtin) { FRAMES.push(Object.assign({}, CLASSIC, { name: f.name || 'classic' })); continue; }
+      try { const p = await prepFrame(f); if (p.wins.length >= 3) FRAMES.push(p); } catch (e) { log('frame failed: ' + f.file); }
+    }
+    if (!FRAMES.length) FRAMES.push(CLASSIC);
+    $('frameSel').innerHTML = FRAMES.map((f, i) => `<option value="${i}">${f.name}</option>`).join('');
+  }
+
+  // ---------- camera + recording ----------
+  async function ensureCamera(){
+    if (stream && stream.active) return;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1440 } } });
+    video.srcObject = stream; await video.play().catch(() => {});
+    await new Promise(r => video.videoWidth ? r() : video.onloadedmetadata = r);
+  }
+  function startClip(){
+    const chunks = [], rec = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond: 4e6 }, TYPE ? { mimeType: TYPE } : {}));
+    rec.ondataavailable = e => e.data && e.data.size && chunks.push(e.data);
+    const done = new Promise(r => rec.onstop = () => r(new Blob(chunks, { type: rec.mimeType || TYPE || 'video/mp4' })));
+    rec.start(); return { rec, done, t0: performance.now() };
+  }
+
+  async function runTest(){
+    $('go').disabled = true; $('out').classList.remove('on'); $('log').textContent = '';
+    if (!TYPE && TYPE !== '') { $('status').textContent = 'This browser can’t record video (no MediaRecorder).'; $('go').disabled = false; return; }
+    $('status').textContent = 'starting camera…';
+    try { await ensureCamera(); } catch (e) { $('status').textContent = 'camera error: ' + e.message; $('go').disabled = false; return; }
+    clips = [];
+    for (let s=0; s<3; s++){
+      $('status').textContent = `pose ${s+1} of 3`;
+      // countdown 3-2-1; the clip starts recording 1.5 s before the shutter and stops 1.5 s after
+      let clip = null;
+      for (let n=3; n>0; n--){
+        $('count').textContent = n; $('count').style.color = n % 2 ? 'var(--mag)' : 'var(--cyan)';
+        if (n === 2) { await sleep(500); clip = startClip(); $('rec').classList.add('on'); await sleep(500); }   // 1.5 s before the shutter
+        else await sleep(1000);
+      }
+      $('count').textContent = '';
+      const shotAt = performance.now();
+      const f = $('flash'); f.className = ''; void f.offsetWidth; f.className = 'go';
+      await sleep(POST);
+      clip.rec.stop(); $('rec').classList.remove('on');
+      const blob = await clip.done;
+      clips.push({ blob, offset: (shotAt - clip.t0) / 1000 });
+      if (s < 2) await sleep(400);
+    }
+    await build();
+    $('go').disabled = false;
+  }
+
+  // ---------- build the moving strip ----------
+  const INKS = ['#E73D7D', '#4DABE9', '#FDFF64'];
+  function drawCoverVideo(x, v, X, Y, W, H){
+    const sw = v.videoWidth, sh = v.videoHeight; if (!sw) return;
+    const r = Math.max(W/sw, H/sh), cw = W/r, ch = H/r;
+    x.save(); x.translate(X + W, Y); x.scale(-1, 1);          // mirror, like the booth
+    x.drawImage(v, (sw-cw)/2, (sh-ch)/2, cw, ch, 0, 0, W, H);
+    x.restore();
+  }
+  function drawFrameOn(x, fr, vids, look){
+    x.globalCompositeOperation = 'source-over';
+    x.fillStyle = fr.builtin ? '#fffdf8' : '#fff'; x.fillRect(0, 0, STRIP_W, SHEET_H);
+    fr.wins.slice(0, 3).forEach((r, i) => {
+      const bx = r.x - 3, by = r.y - 3, bw = r.w + 6, bh = r.h + 6;
+      x.save(); x.beginPath(); x.rect(bx, by, bw, bh); x.clip();
+      drawCoverVideo(x, vids[i], bx, by, bw, bh);
+      if (look === 'bw') { x.globalCompositeOperation = 'saturation'; x.fillStyle = '#808080'; x.fillRect(bx, by, bw, bh); }
+      if (look === 'show') { x.globalCompositeOperation = 'color'; x.fillStyle = INKS[i]; x.fillRect(bx, by, bw, bh); }
+      x.restore(); x.globalCompositeOperation = 'source-over';
+    });
+    if (fr.builtin) {
+      if (logo) { const s = Math.min(300 / logo.width, 66 / logo.height), lw = logo.width*s, lh = logo.height*s; x.drawImage(logo, 300 - lw/2, 1700 - lh/2, lw, lh); }
+    } else x.drawImage(fr.img, fr.fit.x, fr.fit.y, fr.fit.w, fr.fit.h);
+  }
+  async function build(){
+    const fr = FRAMES[+$('frameSel').value] || FRAMES[0], look = $('lookSel').value;
+    $('status').textContent = 'building your moving strip…';
+    const t0 = performance.now();
+    const vids = await Promise.all(clips.map(async c => {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(c.blob);
+      Object.assign(v.style, { position: 'fixed', left: '0', top: '0', width: '4px', height: '3px', opacity: '0.01', pointerEvents: 'none' });
+      document.body.appendChild(v);
+      await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('clip would not load')); });
+      return v;
+    }));
+    const cv = $('strip'), x = cv.getContext('2d');
+    drawFrameOn(x, fr, vids, look);
+    const cs = cv.captureStream(30);
+    const chunks = [], rec = new MediaRecorder(cs, Object.assign({ videoBitsPerSecond: 5e6 }, TYPE ? { mimeType: TYPE } : {}));
+    rec.ondataavailable = e => e.data && e.data.size && chunks.push(e.data);
+    const done = new Promise(r => rec.onstop = r);
+    rec.start();
+    vids.forEach(v => { v.currentTime = 0; const p = v.play(); if (p && p.catch) p.catch(err => log('play: ' + err.message)); });
+    const longest = Math.max(...vids.map(v => isFinite(v.duration) ? v.duration : (PRE + POST) / 1000));
+    const end = performance.now() + Math.min(5000, longest * 1000 + 100);
+    let frames = 0;
+    await new Promise(res => {
+      const tick = () => {
+        drawFrameOn(x, fr, vids, look); frames++;
+        if (performance.now() < end && !vids.every(v => v.ended)) requestAnimationFrame(tick); else res();
+      };
+      requestAnimationFrame(tick);
+    });
+    rec.stop(); await done;
+    vids.forEach(v => { URL.revokeObjectURL(v.src); v.remove(); });
+    const type = rec.mimeType || TYPE || 'video/mp4';
+    result = new Blob(chunks, { type });
+    const secs = (performance.now() - t0) / 1000;
+    $('result').src = URL.createObjectURL(result); $('result').play().catch(() => {});
+    $('stats').innerHTML = `<b>Format:</b> ${type.split(';')[0]}<br><b>Video size:</b> ${(result.size/1048576).toFixed(2)} MB<br>` +
+      `<b>Build time:</b> ${secs.toFixed(1)} s (${Math.round(frames / Math.max(.1, secs))} fps drawn)<br>` +
+      `<b>Clips:</b> ${clips.map(c => (c.blob.size/1048576).toFixed(1) + ' MB').join(', ')}`;
+    $('qr').style.display = 'none';
+    $('out').classList.add('on');
+    $('status').textContent = 'done! it plays on a loop below';
+  }
+
+  // ---------- save + upload ----------
+  $('save').onclick = async () => {
+    if (!result) return;
+    const ext = result.type.includes('mp4') ? 'mp4' : 'webm', file = new File([result], 'live-strip.' + ext, { type: result.type.split(';')[0] });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file] }); } catch (e) {} }
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; a.click(); }
+  };
+  $('upload').onclick = async () => {
+    if (!result) return;
+    $('status').textContent = 'uploading…';
+    const id = 'livetest-' + Date.now().toString(36), t0 = performance.now();
+    const fd = new FormData(); fd.append('file', result, id + (result.type.includes('mp4') ? '.mp4' : '.webm'));
+    fd.append('upload_preset', preset); fd.append('public_id', id);
+    try {
+      const r = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud)}/video/upload`, { method: 'POST', body: fd });
+      const j = await r.json();
+      if (!r.ok) throw new Error((j.error && j.error.message) || r.status);
+      // .mp4 delivery so iPhones can play and save it even if the recording was webm
+      const url = j.secure_url.replace(/\.(webm|mov|mp4)$/i, '.mp4');
+      drawQR($('qr').getContext('2d'), url, 0, 0, 400); $('qr').style.display = 'block';
+      $('status').textContent = `uploaded in ${((performance.now() - t0) / 1000).toFixed(1)} s — scan to try it on a phone`;
+    } catch (e) { $('status').textContent = 'upload failed: ' + e.message + ' (the upload preset may need video allowed)'; }
+  };
+  $('go').onclick = runTest;
+  $('again').onclick = async () => { if (clips.length === 3) { $('again').disabled = true; await build(); $('again').disabled = false; } };
+  loadFrames();
+  if (!window.isSecureContext) $('status').textContent = 'Open this page from the https:// GitHub Pages address so the camera works.';
+})();
+</script>
+</body>
+</html>
