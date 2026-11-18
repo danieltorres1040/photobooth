@@ -63,6 +63,8 @@
       <button class="btn" id="save">save / share video</button>
       <button class="btn ghost" id="again">build again (new frame or filter)</button>
       <button class="btn ghost" id="upload">test upload + QR code</button>
+      <label>QR page address (where watch.html lives)<input id="viewer" type="url" placeholder="same place as this page" autocapitalize="off" autocorrect="off" spellcheck="false"
+        style="font:inherit;font-size:15px;font-weight:400;padding:10px 12px;border:2px solid #000"></label>
       <canvas id="qr" width="400" height="400"></canvas>
     </div>
   </div>
@@ -162,13 +164,13 @@
       let clip = null;
       for (let n=3; n>0; n--){
         $('count').textContent = n; $('count').style.color = n % 2 ? 'var(--mag)' : 'var(--cyan)';
-        if (n === 2) { await sleep(500); clip = startClip(); $('rec').classList.add('on'); await sleep(500); }   // 1.5 s before the shutter
-        else await sleep(1000);
+        if (n === 2) { clip = startClip(); $('rec').classList.add('on'); }   // 2 s before the shutter (the first half-second is skipped later)
+        await sleep(1000);
       }
       $('count').textContent = '';
       const shotAt = performance.now();
       const f = $('flash'); f.className = ''; void f.offsetWidth; f.className = 'go';
-      await sleep(POST);
+      await sleep(POST + 200);
       clip.rec.stop(); $('rec').classList.remove('on');
       const blob = await clip.done;
       clips.push({ blob, offset: (shotAt - clip.t0) / 1000 });
@@ -330,20 +332,27 @@
       return v;
     }));
     const cv = $('strip'), x = cv.getContext('2d');
-    drawFrameOn(x, fr, vids, look);
     const cs = cv.captureStream(30);
     const chunks = [], rec = new MediaRecorder(cs, Object.assign({ videoBitsPerSecond: 5e6 }, TYPE ? { mimeType: TYPE } : {}));
     rec.ondataavailable = e => e.data && e.data.size && chunks.push(e.data);
     const done = new Promise(r => rec.onstop = r);
+    // start each clip 1.5 s before its shutter (skips the camera's frozen first frames), and only start
+    // recording once all three are really moving, so the strip never begins on a still frame
+    const starts = clips.map(c => Math.max(0, c.offset - PRE / 1000));
+    await Promise.all(vids.map((v, i) => new Promise(res => { v.onseeked = res; v.currentTime = starts[i]; setTimeout(res, 1500); })));
+    vids.forEach(v => { const p = v.play(); if (p && p.catch) p.catch(err => log('play: ' + err.message)); });
+    const moving = () => vids.every((v, i) => !v.paused && v.currentTime > starts[i] + 0.04);
+    const waitT = performance.now();
+    await new Promise(res => { const w = () => (moving() || performance.now() - waitT > 2000) ? res() : requestAnimationFrame(w); requestAnimationFrame(w); });
+    const LEN = (PRE + POST) / 1000, end = performance.now() + LEN * 1000 + 300;
+    drawFrameOn(x, fr, vids, look);
     rec.start();
-    vids.forEach(v => { v.currentTime = 0; const p = v.play(); if (p && p.catch) p.catch(err => log('play: ' + err.message)); });
-    const longest = Math.max(...vids.map(v => isFinite(v.duration) ? v.duration : (PRE + POST) / 1000));
-    const end = performance.now() + Math.min(5000, longest * 1000 + 100);
     let frames = 0;
     await new Promise(res => {
       const tick = () => {
         drawFrameOn(x, fr, vids, look); frames++;
-        if (performance.now() < end && !vids.every(v => v.ended)) requestAnimationFrame(tick); else res();
+        const finished = vids.every((v, i) => v.ended || v.currentTime >= starts[i] + LEN);
+        if (performance.now() < end && !finished) requestAnimationFrame(tick); else res();
       };
       requestAnimationFrame(tick);
     });
@@ -380,11 +389,18 @@
       if (!r.ok) throw new Error((j.error && j.error.message) || r.status);
       // .mp4 delivery so iPhones can play and save it even if the recording was webm
       // the code opens our own viewer page, which has a real "save to photos" button
-      const url = new URL(`watch.html?c=${encodeURIComponent(cloud)}&id=${encodeURIComponent(j.public_id || id)}`, location.href).href;
+      const vb = ($('viewer').value || '').trim();
+      try { localStorage.setItem('booth.viewer', vb); } catch (e) {}
+      const page = vb ? (/\.html$/.test(vb) ? vb : vb.replace(/\/?$/, '/') + 'watch.html') : new URL('watch.html', location.href).href;
+      const url = `${page}?c=${encodeURIComponent(cloud)}&id=${encodeURIComponent(j.public_id || id)}`;
       drawQR($('qr').getContext('2d'), url, 0, 0, 400); $('qr').style.display = 'block';
       $('status').textContent = `uploaded in ${((performance.now() - t0) / 1000).toFixed(1)} s — scan to try it on a phone`;
     } catch (e) { $('status').textContent = 'upload failed: ' + e.message + ' (the upload preset may need video allowed)'; }
   };
+  try { $('viewer').value = localStorage.getItem('booth.viewer') || ''; } catch (e) {}
+  // same lock as the booth: only devices unlocked with the booth code can use this page
+  let ok = false; try { ok = localStorage.getItem('booth.unlocked') === '1'; } catch (e) {}
+  if (!ok) { document.querySelector('.wrap').innerHTML = '<h1>To be continued</h1><p>This photobooth lives at the Fall 26 Senior Show ♡</p>'; return; }
   $('go').onclick = runTest;
   $('again').onclick = async () => { if (clips.length === 3) { $('again').disabled = true; await build(); $('again').disabled = false; } };
   loadFrames();

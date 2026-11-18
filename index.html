@@ -272,6 +272,18 @@
   @media (max-width:600px){.grid{grid-template-columns:1fr}}
 
   #secret{position:fixed;top:0;left:0;width:90px;height:90px;z-index:40}
+  /* lock screen: anyone who opens the website on their own phone sees this instead of the booth */
+  #lock{position:fixed;inset:0;z-index:70;background:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;text-align:center}
+  #lock.on{display:flex}
+  #lock .lbar{display:flex;width:min(300px,70vw);height:7px}
+  #lock .lbar i{flex:1} #lock .lbar i:nth-child(1){background:var(--mag)} #lock .lbar i:nth-child(2){background:var(--cyan)}
+  #lock .lbar i:nth-child(3){background:var(--yel)} #lock .lbar i:nth-child(4){background:#000} #lock .lbar i:nth-child(5){background:var(--mag)}
+  #lock img{width:min(360px,72vw);height:auto}
+  #lock p{margin:0;font-size:18px;font-weight:500;color:#333;max-width:420px;line-height:1.45}
+  #lockForm{display:none;gap:10px;align-items:center}
+  #lockForm.on{display:flex}
+  #lockForm input{font:inherit;font-size:18px;padding:12px 14px;border:2px solid #000;width:180px;text-align:center}
+  #lockForm button{font:inherit;font-size:17px;font-weight:600;background:#000;color:#fff;border:0;height:50px;padding:0 20px}
   #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#000;color:#fff;padding:12px 20px;border-radius:12px;font-size:15px;opacity:0;transition:opacity .3s;z-index:60;pointer-events:none;max-width:90vw}
   #toast.show{opacity:1}
   #printArea{display:none}
@@ -287,6 +299,12 @@
 <body>
 
 <div id="secret" aria-hidden="true"></div>
+<div id="lock">
+  <div class="lbar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+  <img src="logo.png" alt="To Be Continued" id="lockLogo">
+  <p>This photobooth lives at the Fall 26 Senior Show.<br>Come find us and take some pics ♡</p>
+  <form id="lockForm" autocomplete="off"><input id="lockCode" type="password" placeholder="booth code" aria-label="booth code"><button>unlock</button></form>
+</div>
 
 <div id="stage">
   <div id="prog" aria-hidden="true">
@@ -473,7 +491,7 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v65';
+  const BOOTH_VERSION = 'v66';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
@@ -1708,6 +1726,25 @@
     const reloadIfIdle = () => { if (current === 'booth' && boothMode === 'attract' && !starting) location.reload(); else reloadWanted = true; };
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadSW) reloadIfIdle(); hadSW = true; });
     setInterval(() => { if (reloadWanted) reloadIfIdle(); }, 5000);
+  }
+  // ---------- lock: only devices that have been unlocked with the booth code can run the booth ----------
+  const BOOTH_CODE = 'tbc26';   // change this to set your own code
+  const unlocked = () => { try { return localStorage.getItem('booth.unlocked') === '1'; } catch (e) { return false; } };
+  if (new URLSearchParams(location.search).get('unlock') === BOOTH_CODE) { try { localStorage.setItem('booth.unlocked', '1'); } catch (e) {} history.replaceState(null, '', location.pathname); }
+  if (!unlocked()) {
+    $('lock').classList.add('on');
+    let taps = 0, tt = 0;
+    $('lockLogo').addEventListener('click', () => {      // tap the logo 5 times to show the code box
+      taps++; clearTimeout(tt); tt = setTimeout(() => taps = 0, 1500);
+      if (taps >= 5) { $('lockForm').classList.add('on'); $('lockCode').focus(); }
+    });
+    $('lockForm').addEventListener('submit', e => {
+      e.preventDefault();
+      if ($('lockCode').value.trim().toLowerCase() === BOOTH_CODE) {
+        try { localStorage.setItem('booth.unlocked', '1'); } catch (err) {}
+        $('lock').classList.remove('on');
+      } else { $('lockCode').value = ''; $('lockForm').classList.remove('shake'); void $('lockForm').offsetWidth; $('lockForm').classList.add('shake'); }
+    });
   }
   fit();
   addEventListener('resize', fit);
