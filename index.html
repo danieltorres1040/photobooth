@@ -495,13 +495,13 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v67';
+  const BOOTH_VERSION = 'v68';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
     printMode: 'auto', serverUrl: '', copies: 1, printWait: 45,
     countdown: 3, between: 1, camera: 'user', shots: 5, sound: true, cloudName: 'f6qum3qh', uploadPreset: 'photobooth', qrOnStrip: false, qrPos: 'br', idle: 60, mirror: true,
-    bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100, liveCopy: 'on', viewerUrl: ''
+    bg: '#fffdf8', fg: '#2b2420', logo: 'default', logoSize: 100, liveCopy: 'on', viewerUrl: 'https://tobecontinued26.github.io'
   };
   const store = {
     get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
@@ -518,7 +518,7 @@
     if (!cfg.uploadPreset) cfg.uploadPreset = DEFAULTS.uploadPreset;
     cfg.v = 4;
   }
-  if (!cfg.viewerUrl) { try { cfg.viewerUrl = localStorage.getItem('booth.viewer') || ''; } catch (e) {} }   // address typed on the live strip test page
+  if (!cfg.viewerUrl) cfg.viewerUrl = DEFAULTS.viewerUrl;   // QR codes always open the save page on the QR site
   let sheetsPrinted = parseInt(store.get('booth.sheets') || '0', 10) || 0;
   let totalSessions = parseInt(store.get('booth.sessions') || '0', 10) || 0;
 
