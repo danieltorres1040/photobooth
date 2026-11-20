@@ -477,7 +477,7 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v70';
+  const BOOTH_VERSION = 'v71';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
@@ -1567,10 +1567,10 @@
     $('stripOut').classList.remove('go'); $('stripOut').src = job.stripURL; $('held').src = job.stripURL;
     $('coin').classList.remove('drop'); $('coinSlot').classList.remove('lit');
     go('booth'); setProg(90);
-    await sleep(1300);                       // fade in on the open booth, guest still live in the window
-    SFX.swoosh(1.4); await animateCurtain(1, 0, 1500);
+    await sleep(750);                        // fade in on the open booth, guest still live in the window
+    SFX.swoosh(.8); await animateCurtain(1, 0, 800);
     boothText('printing…', true);
-    await sleep(250);
+    await sleep(120);
     const coin = $('coin'); coin.getBoundingClientRect(); coin.classList.add('drop');
     await sleep(1000); SFX.clink(); $('coinSlot').classList.add('lit');
     await sleep(500); $('coinSlot').classList.remove('lit');
@@ -1802,8 +1802,9 @@
     const base = (cfg.viewerUrl || '').trim();
     if (base) {
       const page = /\.html$/i.test(base) ? base : base.replace(/\/?$/, '/') + 'watch.html';
-      return `${page}?c=${encodeURIComponent(cfg.cloudName)}&id=${encodeURIComponent(id)}${kind === 'image' ? '&t=i' : ''}`;
+      return `${page}?c=${encodeURIComponent(cfg.cloudName)}&id=${encodeURIComponent(id)}${kind === 'image' ? '&t=i' : kind === 'both' ? '&p=1' : ''}`;   // both = live video + photo
     }
+    if (kind === 'both') kind = 'video';
     return `https://res.cloudinary.com/${encodeURIComponent(cfg.cloudName)}/${kind}/upload/${id}.${kind === 'video' ? 'mp4' : 'jpg'}`;
   }
   async function uploadStrip(id, blob, kind){
@@ -1831,7 +1832,7 @@
     });
   }
   async function qTx(mode, fn){ const db = await qOpen(); return new Promise((res, rej) => { const t = db.transaction('q', mode), s = t.objectStore('q'); const out = fn(s); t.oncomplete = () => res(out && out.result); t.onerror = () => rej(t.error); }); }
-  async function queueAdd(id, blob, kind){ try { await qTx('readwrite', s => s.put({ id, blob, kind: kind || 'image', cloud: cfg.cloudName, preset: cfg.uploadPreset, t: Date.now() })); } catch(e){ console.warn(e); } }
+  async function queueAdd(id, blob, kind){ kind = kind || 'image'; try { await qTx('readwrite', s => s.put({ id: id + ':' + kind, pid: id, blob, kind, cloud: cfg.cloudName, preset: cfg.uploadPreset, t: Date.now() })); } catch(e){ console.warn(e); } }
   async function queueCount(){ try { return await qTx('readonly', s => s.count()); } catch(e){ return 0; } }
   let flushing = false;
   async function flushQueue(){
@@ -1839,7 +1840,7 @@
     try {
       const items = await qTx('readonly', s => s.getAll()) || [];
       for (const it of items){
-        try { await uploadStrip(it.id, it.blob, it.kind || 'image'); await qTx('readwrite', s => s.delete(it.id)); }
+        try { await uploadStrip(it.pid || it.id, it.blob, it.kind || 'image'); await qTx('readwrite', s => s.delete(it.id)); }
         catch (e) { if (e.permanent && !/preset|cloud/i.test(e.message)) await qTx('readwrite', s => s.delete(it.id)); else break; }
       }
     } catch(e){ console.warn(e); }
@@ -1855,33 +1856,32 @@
     const c = $('qrCanvas'); c.getContext('2d').clearRect(0,0,c.width,c.height);
     $('qrStatus').textContent = 'making your digital copy…';
   }
+  // uploads the photo strip and (when made) the live video under the same name; the QR page offers both
   async function sendCopy(id, stripURL, liveP){
     if (!digitalOn() || !id) return;
-    let blob = dataURLToFile(stripURL, id + '.jpg'), kind = 'image';
-    const st = $('qrStatus');
+    const st = $('qrStatus'), photo = dataURLToFile(stripURL, id + '.jpg');
     const mine = () => printJob && session && session.id === id;
+    const up = (blob, kind) => uploadStrip(id, blob, kind).then(() => ({ ok: true }), e => ({ ok: false, e }));
+    const photoP = up(photo, 'image');                 // photo goes up straight away, while the video is still being made
     const video = liveP ? await liveP : null;
-    if (video) { blob = video; kind = 'video'; }
-    try {
-      try { await uploadStrip(id, blob, kind); }
-      catch (e) {
-        // video refused (e.g. the upload preset only allows images): send the photo strip instead
-        if (kind !== 'video' || !e.permanent) throw e;
-        console.warn('video upload refused, sending photo', e);
-        blob = dataURLToFile(stripURL, id + '.jpg'); kind = 'image';
-        await uploadStrip(id, blob, kind);
-      }
+    const vr = video ? await up(video, 'video') : null;
+    const pr = await photoP;
+    const vidOK = !!(vr && vr.ok), picOK = pr.ok;
+    if (vidOK || picOK) {
       if (!mine()) return;
       // only now is the link live: draw the code and reveal it
-      const url = copyURL(id, kind);
+      const url = copyURL(id, vidOK && picOK ? 'both' : vidOK ? 'video' : 'image');
       const c = $('qrCanvas'); drawQR(c.getContext('2d'), url, 0, 0, c.width);
       $('qrCard').classList.add('ready');
       if (current === 'thanks' && currentMode() === 'none') $('thanksMsg').textContent = 'scan the code to save your strip ♡';
-      st.innerHTML = 'scan, then tap &amp; hold the photo to save it';
-    } catch (e) {
-      console.warn('upload', e);
-      if (e.permanent) { if (mine()) { $('qrCard').classList.add('nolink'); st.textContent = 'digital copy unavailable right now — ask a booth helper'; } toast('Upload error: ' + e.message, 8000); }
-      else { await queueAdd(id, blob, kind); if (mine()) { $('qrCard').classList.add('nolink'); st.innerHTML = 'the booth is offline right now —<br>your strip is saved and will upload later'; } }
+      if (video && !vidOK && !vr.e.permanent) queueAdd(id, video, 'video');   // video will follow when it can
+      return;
+    }
+    const e = pr.e; console.warn('upload', e);
+    if (e.permanent) { if (mine()) { $('qrCard').classList.add('nolink'); st.textContent = 'digital copy unavailable right now — ask a booth helper'; } toast('Upload error: ' + e.message, 8000); }
+    else {
+      await queueAdd(id, photo, 'image'); if (video) await queueAdd(id, video, 'video');
+      if (mine()) { $('qrCard').classList.add('nolink'); st.innerHTML = 'the booth is offline right now —<br>your strip is saved and will upload later'; }
     }
   }
   function drawStripQR(ctx, x0, id){
