@@ -506,7 +506,7 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v74';
+  const BOOTH_VERSION = 'v75';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
@@ -892,7 +892,7 @@
   // ---------- live strip: each photo window plays ~3 s of video around the moment it was taken ----------
   // The camera records a short clip around every shutter. At print time the 3 picked clips are played
   // through the chosen frame + filter (WebGL, same colour recipes as the prints) and recorded as one video.
-  const LIVE_PRE = 4.5, LIVE_POST = 0.4, LIVE_SPEED = 1.5;   // up to ~4.5 s before each shutter + the flash, played back at 1.5×
+  const LIVE_POST = 0.4, LIVE_SPEED = 1.5;   // the countdown before each shutter + the flash, played back at 1.5×
   const liveRecs = new Set();   // every camera recorder still running, so leaving early can stop them
   const LIVE_TYPE = (() => {
     if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) return null;
@@ -1043,7 +1043,9 @@
       await Promise.all(vids.map(v => new Promise((res, rej) => { if (v.readyState >= 2) res(); else { v.onloadeddata = res; v.onerror = () => rej(new Error('clip')); } })));
       // start each clip 1.5 s before its shutter (skips the camera's frozen first frames)
       // line the clips up so their shutters happen together; skip each clip's first half-second (the camera's frozen frames)
-      const pre = Math.max(0.3, Math.min(LIVE_PRE, ...clips.map(c => c.offset - 0.5)));
+      // how far back each window starts: the whole countdown (plus the pause before it), but never back to the previous photo's flash
+      const maxPre = Math.min(6, Math.max(1, (+cfg.countdown || 3) + (+cfg.between || 0) - 0.3));
+      const pre = Math.max(0.3, Math.min(maxPre, ...clips.map(c => c.offset - 0.5)));
       const starts = clips.map(c => Math.max(0, c.offset - pre));
       await Promise.all(vids.map((v, i) => new Promise(res => { v.onseeked = res; v.currentTime = starts[i]; setTimeout(res, 1500); })));
       let cv = $('liveCanvas');
