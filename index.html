@@ -179,6 +179,18 @@
   .sw.show{background:var(--mag);animation:swCycle 3s steps(1,end) infinite}
   @keyframes swCycle{0%{background:#E73D7D}33.333%{background:#4DABE9}66.666%{background:#FDFF64}}
 
+  /* print size */
+  .sizes{display:flex;gap:56px;justify-content:center}
+  .sz{background:none;border:0;padding:0;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;color:inherit;font:inherit}
+  .sz canvas{display:block;width:270px;height:405px;box-shadow:0 8px 24px rgba(0,0,0,.16);outline:5px solid transparent;outline-offset:6px;transition:outline-color .2s, transform .15s}
+  .sz:active canvas{transform:scale(.98)}
+  .sz.sel canvas{outline-color:var(--mag)}
+  .sz .t{font-size:19px;font-weight:600;color:#4d4d4d;margin-top:10px}
+  .sz .s{font-size:14px;color:var(--muted)}
+  .sz.sel .t{color:var(--mag);font-weight:700}
+  #sizeActs{margin-top:44px}
+  #p-size .body{justify-content:flex-start;padding-top:70px}
+
   /* thanks */
   #bgVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;background:#eff2e4 url(bg-poster.jpg) center/cover}
   #p-thanks .ttl,#p-thanks .body{z-index:1}
@@ -246,6 +258,9 @@
   #stage.phone .qrSteps{gap:10px}
   #stage.phone .qrSteps li{font-size:12px;gap:9px}
   #stage.phone .qrSteps b{width:21px;height:21px;font-size:9px}
+  #stage.phone .sizes{gap:26px}
+  #stage.phone .sz canvas{width:200px;height:300px}
+  #stage.phone #p-size .body{padding-top:40px}
   #stage.phone #thanksMsg{font-size:17px;margin-top:20px}
 
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30}
@@ -363,10 +378,23 @@
             <button class="pill" data-look="rio"><i class="sw rio"></i><span>rio de janeiro</span></button>
             <button class="pill" data-look="show"><i class="sw show"></i><span>to be continued</span></button>
           </div>
-          <button class="btn" id="printBtn" disabled>ready to print!</button>
+          <button class="btn" id="filtNext" disabled>next →</button>
         </div>
       </div>
       <div class="under"><button class="link" id="filtBack">← back</button></div>
+    </div>
+  </section>
+
+  <!-- PRINT SIZE -->
+  <section class="page" id="p-size">
+    <h2 class="ttl">Pick your print</h2>
+    <div class="body">
+      <div class="sizes">
+        <button class="sz" data-l="standard"><canvas width="400" height="600"></canvas><span class="t">standard</span><span class="s">2 strips</span></button>
+        <button class="sz" data-l="mini"><canvas width="400" height="600"></canvas><span class="t">standard + minis</span><span class="s">1 strip + 4 mini strips</span></button>
+      </div>
+      <div class="acts" id="sizeActs"><button class="btn" id="printBtn" disabled>ready to print!</button></div>
+      <div class="under"><button class="link" id="sizeBack">← back</button></div>
     </div>
   </section>
 
@@ -384,7 +412,7 @@
           <ol class="qrSteps">
             <li><b>01</b><span><strong>Scan QR</strong> with your cam</span></li>
             <li><b>02</b><span><strong>Tap</strong> “save to photos”</span></li>
-            <li><b>03</b><span><strong>Save 2 items</strong> to gallery</span></li>
+            <li><b>03</b><span><strong>Save 2 images</strong> to gallery</span></li>
           </ol>
           <div id="qrStatus"></div>
         </div>
@@ -478,7 +506,7 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v73';
+  const BOOTH_VERSION = 'v74';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
@@ -576,7 +604,7 @@
 
   // ---------- idle reset ----------
   let idleTimer, current = 'booth', printing = false;
-  const IDLE_PAGES = ['shoot', 'frame', 'favs', 'filter'];
+  const IDLE_PAGES = ['shoot', 'frame', 'favs', 'filter', 'size'];
   function idleOK(){ return IDLE_PAGES.includes(current) && !(session && session.running) && !printing; }
   function bumpIdle(){
     clearTimeout(idleTimer);
@@ -864,7 +892,8 @@
   // ---------- live strip: each photo window plays ~3 s of video around the moment it was taken ----------
   // The camera records a short clip around every shutter. At print time the 3 picked clips are played
   // through the chosen frame + filter (WebGL, same colour recipes as the prints) and recorded as one video.
-  const LIVE_PRE = 1.5, LIVE_POST = 1.5;
+  const LIVE_PRE = 4.5, LIVE_POST = 0.4, LIVE_SPEED = 1.5;   // up to ~4.5 s before each shutter + the flash, played back at 1.5×
+  const liveRecs = new Set();   // every camera recorder still running, so leaving early can stop them
   const LIVE_TYPE = (() => {
     if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) return null;
     return ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || null;
@@ -872,18 +901,16 @@
   function liveOn(){ return cfg.liveCopy !== 'off' && !!LIVE_TYPE && digitalOn(); }
   function startClip(){
     try {
-      const chunks = [], rec = new MediaRecorder(stream, { mimeType: LIVE_TYPE, videoBitsPerSecond: 4e6 });
+      const chunks = [], rec = new MediaRecorder(stream, { mimeType: LIVE_TYPE, videoBitsPerSecond: 3e6 });
       rec.ondataavailable = e => e.data && e.data.size && chunks.push(e.data);
       const done = new Promise(r => { rec.onstop = () => r(new Blob(chunks, { type: rec.mimeType || LIVE_TYPE })); rec.onerror = () => r(null); });
-      rec.start(); return { rec, done, t0: performance.now() };
+      rec.start(); liveRecs.add(rec); done.then(() => liveRecs.delete(rec)); return { rec, done, t0: performance.now() };
     } catch (e) { console.warn('clip', e); return null; }
   }
-  function endClip(c, shotAt){
-    if (!c) return null;
-    const out = { offset: (shotAt - c.t0) / 1000, blob: null };
-    out.ready = new Promise(res => setTimeout(() => { try { c.rec.stop(); } catch (e) {} c.done.then(b => { out.blob = b; res(b); }); }, (LIVE_POST + 0.25) * 1000));
-    return out;
-  }
+  // the camera records continuously from the moment the curtains open until just after the last photo
+  let liveRec = null;
+  function startLiveRec(){ stopLiveRecs(); liveRec = (liveOn() && stream) ? startClip() : null; }
+  function stopLiveRecs(){ liveRecs.forEach(r => { try { r.stop(); } catch (e) {} }); }
   function lutRGBA(L){ const o = new Uint8Array(256*4); for (let i=0;i<256;i++){ o[i*4] = L.r[i]; o[i*4+1] = L.g[i]; o[i*4+2] = L.b[i]; o[i*4+3] = 255; } return o; }
   const LOOK_ID = { none: 0, bw: 1, sepia: 2, color: 3, rio: 4, show: 5 };
   const FS = `
@@ -1005,15 +1032,19 @@
       if (!LIVE_TYPE || clips.some(c => !c)) return null;
       const blobs = await Promise.all(clips.map(c => c.ready));
       if (blobs.some(b => !b || !b.size)) return null;
+      const srcs = new Map();
       for (const b of blobs) {
+        if (!srcs.has(b)) srcs.set(b, URL.createObjectURL(b));
         const v = document.createElement('video');
-        v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto'; v.src = URL.createObjectURL(b);
+        v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto'; v.src = srcs.get(b);
         Object.assign(v.style, { position: 'fixed', left: '0', top: '0', width: '4px', height: '3px', opacity: '0.01', pointerEvents: 'none', zIndex: '-1' });
         document.body.appendChild(v); vids.push(v);
       }
       await Promise.all(vids.map(v => new Promise((res, rej) => { if (v.readyState >= 2) res(); else { v.onloadeddata = res; v.onerror = () => rej(new Error('clip')); } })));
       // start each clip 1.5 s before its shutter (skips the camera's frozen first frames)
-      const starts = clips.map(c => Math.max(0, c.offset - LIVE_PRE));
+      // line the clips up so their shutters happen together; skip each clip's first half-second (the camera's frozen frames)
+      const pre = Math.max(0.3, Math.min(LIVE_PRE, ...clips.map(c => c.offset - 0.5)));
+      const starts = clips.map(c => Math.max(0, c.offset - pre));
       await Promise.all(vids.map((v, i) => new Promise(res => { v.onseeked = res; v.currentTime = starts[i]; setTimeout(res, 1500); })));
       let cv = $('liveCanvas');
       if (!cv) { cv = document.createElement('canvas'); cv.id = 'liveCanvas'; cv.width = STRIP_W; cv.height = SHEET_H;
@@ -1023,11 +1054,11 @@
       const rec = new MediaRecorder(cs, { mimeType: LIVE_TYPE, videoBitsPerSecond: 5e6 });
       rec.ondataavailable = e => e.data && e.data.size && chunks.push(e.data);
       const done = new Promise(r => rec.onstop = r);
-      vids.forEach(v => { const p = v.play(); if (p && p.catch) p.catch(() => {}); });
+      vids.forEach(v => { v.defaultPlaybackRate = LIVE_SPEED; v.playbackRate = LIVE_SPEED; const p = v.play(); if (p && p.catch) p.catch(() => {}); });
       // only start recording once all three are really moving, so the video never begins on a still frame
       const t0 = performance.now();
       await new Promise(res => { const w = () => (vids.every((v, i) => !v.paused && v.currentTime > starts[i] + 0.04) || performance.now() - t0 > 2000) ? res() : requestAnimationFrame(w); requestAnimationFrame(w); });
-      const LEN = LIVE_PRE + LIVE_POST, end = performance.now() + LEN * 1000 + 300;
+      const LEN = pre + LIVE_POST, end = performance.now() + LEN / LIVE_SPEED * 1000 + 400;
       drawLiveFrame(x, fr, vids, look);
       rec.start();
       await new Promise(res => {
@@ -1042,7 +1073,7 @@
       const out = new Blob(chunks, { type: rec.mimeType || LIVE_TYPE });
       return out.size > 1000 ? out : null;
     } catch (e) { console.warn('live strip', e); return null; }
-    finally { vids.forEach(v => { try { v.pause(); URL.revokeObjectURL(v.src); } catch (e) {} v.remove(); }); }
+    finally { vids.forEach(v => { try { v.pause(); URL.revokeObjectURL(v.src); } catch (e) {} v.remove(); }); }   // (revoking a shared URL twice is harmless)
   }
 
   // ---------- strip composition ----------
@@ -1205,16 +1236,31 @@
     const c = $('work'); c.width = SHEET_W; c.height = SHEET_H;
     const ctx = c.getContext('2d');
     const qid = session && session.id;
-    drawFramed(ctx, 0, shots, fr); drawStripQR(ctx, 0, qid);
-    drawFramed(ctx, STRIP_W, shots, fr); drawStripQR(ctx, STRIP_W, qid);
-    // tiny cut marks at the centre line
-    ctx.strokeStyle = 'rgba(128,128,128,.6)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(600, 0); ctx.lineTo(600, 14); ctx.moveTo(600, SHEET_H-14); ctx.lineTo(600, SHEET_H); ctx.stroke();
-    const sheetURL = c.toDataURL('image/jpeg', 0.95);
-    // single-strip preview
+    // one finished strip, then laid out on the 4×6 sheet
     const p = document.createElement('canvas'); p.width = STRIP_W; p.height = SHEET_H;
-    p.getContext('2d').drawImage(c, 0, 0, STRIP_W, SHEET_H, 0, 0, STRIP_W, SHEET_H);
-    return { sheetURL, stripURL: p.toDataURL('image/jpeg', 0.9), file: dataURLToFile(sheetURL, 'photostrip.jpg') };
+    const px = p.getContext('2d'); drawFramed(px, 0, shots, fr); drawStripQR(px, 0, qid);
+    return Object.assign({ strip: p, stripURL: p.toDataURL('image/jpeg', 0.9) }, layoutSheet(p, 'standard'));
+  }
+  // 'standard' = two full strips · 'mini' = one full strip + four half-size strips on the right
+  function drawSheet(ctx, p, layout, k){
+    k = k || 1; const W = STRIP_W * k, H = SHEET_H * k;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W * 2, H);
+    ctx.drawImage(p, 0, 0, W, H);
+    if (layout === 'mini') {
+      for (let r=0;r<2;r++) for (let col=0;col<2;col++) ctx.drawImage(p, W + col * W/2, r * H/2, W/2, H/2);
+      // light dashed cutting guides between the minis
+      ctx.save(); ctx.strokeStyle = 'rgba(150,150,150,.7)'; ctx.lineWidth = Math.max(1, 2 * k); ctx.setLineDash([10 * k, 8 * k]);
+      ctx.beginPath(); ctx.moveTo(W * 1.5, 0); ctx.lineTo(W * 1.5, H); ctx.moveTo(W, H / 2); ctx.lineTo(W * 2, H / 2); ctx.stroke(); ctx.restore();
+    } else ctx.drawImage(p, W, 0, W, H);
+    // tiny cut marks at the centre line
+    ctx.strokeStyle = 'rgba(128,128,128,.6)'; ctx.lineWidth = Math.max(1, 2 * k);
+    ctx.beginPath(); ctx.moveTo(W, 0); ctx.lineTo(W, 14 * k); ctx.moveTo(W, H - 14 * k); ctx.lineTo(W, H); ctx.stroke();
+  }
+  function layoutSheet(p, layout){
+    const c = $('work'); c.width = SHEET_W; c.height = SHEET_H;
+    drawSheet(c.getContext('2d'), p, layout);
+    const sheetURL = c.toDataURL('image/jpeg', 0.95);
+    return { layout, sheetURL, file: dataURLToFile(sheetURL, 'photostrip.jpg') };
   }
   function dataURLToFile(url, name){
     const [head, b64] = url.split(','); const bin = atob(b64); const a = new Uint8Array(bin.length);
@@ -1252,7 +1298,7 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && current === 'thanks') playBg(); });
 
   // ---------- pages + progress bar ----------
-  const STEP = { shoot: 0, frame: 1, favs: 2, filter: 3, thanks: 4 };
+  const STEP = { shoot: 0, frame: 1, favs: 2, filter: 3, size: 4, thanks: 4 };
   function go(id){
     document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'p-' + id));
     current = id;
@@ -1344,7 +1390,7 @@
       toast(err.message || 'Could not start the camera. Check camera permission in Settings › Safari.', 6000);
       boothText('Press to start'); starting = false; return;
     }
-    showWinCam();
+    showWinCam(); startLiveRec();
     SFX.swoosh(1.5);
     await animateCurtain(curO, 1, 1600);
     await sleep(1100);                       // a moment to see yourself in the window
@@ -1392,16 +1438,15 @@
       if (!session || current !== 'shoot') { busy = false; return; }
       shootUI('pose', i);
       slots[i].classList.add('now');
-      let clip = null;
       for (let n=cfg.countdown, k=0; n>0; n--, k++){
-        if (n === Math.min(2, cfg.countdown) && liveOn() && stream) clip = startClip();   // live clip starts ~2 s before the shutter
         count.textContent = n; count.style.color = DOTS[k % 2]; SFX.tick(n === 1);
         count.classList.remove('pop'); void count.offsetWidth; count.classList.add('pop');
         await sleep(1000);
       }
       count.textContent = '';
       const raw = rawFrame(), shotAt = performance.now(); SFX.shutter();
-      session.clips[i] = endClip(clip, shotAt);
+      session.clips[i] = liveRec ? { offset: (shotAt - liveRec.t0) / 1000, ready: liveRec.done } : null;
+      if (i === T - 1 && liveRec) { const r = liveRec.rec; setTimeout(() => { try { r.stop(); } catch (e) {} }, (LIVE_POST + 0.3) * 1000); }
       const f = $('flash'); f.className = ''; void f.offsetWidth; f.className = 'go';
       await sleep(30);
       session.raws.push(raw);
@@ -1511,7 +1556,7 @@
     const s = session; if (!s) return;
     s.look = look; renderLooks();
     const job = ++filtJob, order = s.picked.slice();
-    $('printBtn').disabled = true; last = null;
+    $('filtNext').disabled = true; last = null;
     const need = order.some(i => !s.fx[i + ':' + look]);
     if (need) { $('devWait').classList.add('on'); await sleep(40); }
     const shots = [];
@@ -1526,7 +1571,7 @@
     drawFramed(px, 0, out, s.frame); drawStripQR(px, 0, s.id);
     last = composeSheet(out, s.frame);   // ready before the tap so printing starts instantly
     $('devWait').classList.remove('on');
-    $('printBtn').disabled = false;
+    $('filtNext').disabled = false;
     setProg(80);
     cfg.lastLook = look; saveCfg();
   }
@@ -1538,7 +1583,24 @@
     filtJob++; last = null; $('devWait').classList.remove('on');
     const pc = $('filtPreview'), px = pc.getContext('2d'); px.clearRect(0, 0, STRIP_W, SHEET_H);
     drawFramed(px, 0, s.picked.map(i => s.raws[i]), s.frame);
-    $('printBtn').disabled = true; setProg(68);
+    $('filtNext').disabled = true; setProg(68);
+  }
+
+  // ---------- pick your print: 2 standard strips, or 1 standard + 4 minis ----------
+  function openSize(){
+    const s = session; if (!s || !last) return;
+    document.querySelectorAll('.sz').forEach(el => {
+      const c = el.querySelector('canvas'); drawSheet(c.getContext('2d'), last.strip, el.dataset.l, c.width / SHEET_W);
+    });
+    go('size');
+    if (s.layout) pickSize(s.layout, true); else { renderSize(); $('printBtn').disabled = true; setProg(86); }
+  }
+  function renderSize(){ document.querySelectorAll('.sz').forEach(el => el.classList.toggle('sel', !!session && el.dataset.l === session.layout)); }
+  function pickSize(layout, quiet){
+    const s = session; if (!s || !last) return;
+    s.layout = layout; renderSize();
+    if (last.layout !== layout) Object.assign(last, layoutSheet(last.strip, layout));
+    $('printBtn').disabled = false; setProg(95);
   }
 
   // ---------- printing scene → thanks ----------
@@ -1663,6 +1725,7 @@
   }
 
   function goHome(){
+    stopLiveRecs();
     clearTimeout(thanksT); clearTimeout(idleTimer); filtJob++;
     session = null; printJob = null; printing = false;
     resetBooth(); go('booth');
@@ -1678,6 +1741,9 @@
   $('favsBack').addEventListener('click', () => { SFX.tap(); openFrame(); });
   $('filtBack').addEventListener('click', () => { SFX.tap(); filtJob++; last = null; $('devWait').classList.remove('on'); openFavs(); });
   $('printBtn').addEventListener('click', startPrint);
+  $('filtNext').addEventListener('click', () => { SFX.tap(); openSize(); });
+  $('sizeBack').addEventListener('click', () => { SFX.tap(); setProg(80); go('filter'); });
+  document.querySelectorAll('.sz').forEach(el => el.addEventListener('click', () => { SFX.select(); pickSize(el.dataset.l); }));
   $('doneBtn').addEventListener('click', () => { SFX.tap(); goHome(); });
   function renderFrameList(){}
   function stopAutoPrint(){}
@@ -1806,8 +1872,10 @@
       return `${page}?c=${encodeURIComponent(cfg.cloudName)}&id=${encodeURIComponent(id)}${kind === 'image' ? '&t=i' : kind === 'both' ? '&p=1' : ''}`;   // both = live video + photo
     }
     if (kind === 'both') kind = 'video';
-    return `https://res.cloudinary.com/${encodeURIComponent(cfg.cloudName)}/${kind}/upload/${id}.${kind === 'video' ? 'mp4' : 'jpg'}`;
+    return kind === 'video' ? gifURL(id) : `https://res.cloudinary.com/${encodeURIComponent(cfg.cloudName)}/image/upload/${id}.jpg`;
   }
+  // the live strip is stored as a video and handed out as an animated GIF (Cloudinary converts it)
+  function gifURL(id){ return `https://res.cloudinary.com/${encodeURIComponent(cfg.cloudName)}/video/upload/w_360,fps_15/${id}.gif`; }
   async function uploadStrip(id, blob, kind){
     kind = kind || 'image';
     const fd = new FormData();
@@ -1876,6 +1944,7 @@
       $('qrCard').classList.add('ready');
       if (current === 'thanks' && currentMode() === 'none') $('thanksMsg').textContent = 'scan the code to save your strip ♡';
       if (video && !vidOK && !vr.e.permanent) queueAdd(id, video, 'video');   // video will follow when it can
+      if (vidOK) fetch(gifURL(id)).catch(() => {});   // ask Cloudinary to make the GIF now, so it's ready when they scan
       return;
     }
     const e = pr.e; console.warn('upload', e);
