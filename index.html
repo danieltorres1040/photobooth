@@ -187,7 +187,7 @@
   #p-thanks:not(.hasqr) .thx{width:220px}
   #p-thanks:not(.hasqr) .thx .stripBox{right:0}
   /* SCAN ME! card */
-  .qrCard{position:absolute;left:10px;top:110px;width:300px;height:438px;padding:30px 26px 30px;background:#F4F7EE;border-radius:11px;transform:rotate(-5deg);
+  .qrCard{position:absolute;left:10px;top:110px;width:300px;height:438px;padding:30px 26px 30px;background:#F4F7EE;border:1.5px solid #2a2a2a;border-radius:11px;transform:rotate(-5deg);
     box-shadow:0 14px 34px rgba(0,0,0,.2);display:none;flex-direction:column;align-items:center;z-index:2}
   #p-thanks.hasqr .qrCard{display:flex}
   .qrT{font-size:31px;font-weight:700;letter-spacing:-0.01em;line-height:1}
@@ -200,7 +200,8 @@
   .qrCard.nolink .qrBox canvas,.qrCard.nolink .qrBox .dots3{display:none}
   .qrSteps{list-style:none;margin:0;padding:0;align-self:stretch;display:flex;flex-direction:column;gap:14px}
   .qrSteps li{display:flex;align-items:center;gap:12px;font-size:14px;font-weight:500;letter-spacing:.01em;text-transform:uppercase;color:#111}
-  .qrSteps b{width:29px;height:29px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:12px;font-weight:600;color:#fff}
+  .qrSteps strong{font-weight:700}
+  .qrSteps b{width:25px;height:25px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff}
   .qrSteps li:nth-child(1) b{background:#FD65A5} .qrSteps li:nth-child(2) b{background:#00AEEF} .qrSteps li:nth-child(3) b{background:#F9EE06;color:#000}
   #qrStatus{display:none}
   #thanksMsg{margin-top:26px;min-height:26px;font-size:19px;font-weight:500;color:#4d4d4d;text-align:center}
@@ -244,7 +245,7 @@
   #stage.phone .qrBox{width:160px;height:160px}
   #stage.phone .qrSteps{gap:10px}
   #stage.phone .qrSteps li{font-size:12px;gap:9px}
-  #stage.phone .qrSteps b{width:24px;height:24px;font-size:10px}
+  #stage.phone .qrSteps b{width:21px;height:21px;font-size:9px}
   #stage.phone #thanksMsg{font-size:17px;margin-top:20px}
 
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30}
@@ -381,9 +382,9 @@
           <div class="qrSub">Get a digital copy of your pics!</div>
           <div class="qrBox"><canvas id="qrCanvas" width="400" height="400"></canvas><div class="dots3" aria-hidden="true"><i></i><i></i><i></i></div></div>
           <ol class="qrSteps">
-            <li><b>01</b>Scan QR with your cam</li>
-            <li><b>02</b>Tap “save to photos”</li>
-            <li><b>03</b>Save to your gallery</li>
+            <li><b>01</b><span><strong>Scan QR</strong> with your cam</span></li>
+            <li><b>02</b><span><strong>Press down</strong> on the photo</span></li>
+            <li><b>03</b><span><strong>Save image</strong> to gallery</span></li>
           </ol>
           <div id="qrStatus"></div>
         </div>
@@ -477,7 +478,7 @@
 <script>
 (() => {
   'use strict';
-  const BOOTH_VERSION = 'v71';
+  const BOOTH_VERSION = 'v72';
   // ---------- settings ----------
   const DEFAULTS = {
     eventName: 'photo booth', footer: '', title: 'PHOTOBOOTH', sub: '',
